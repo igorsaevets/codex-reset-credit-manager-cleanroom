@@ -1,0 +1,47 @@
+{
+  "generated_at": "2026-07-26T13:29:41.766431+00:00",
+  "tier": "deep",
+  "marker": "REVIEW-COMPLETE-20260726-CLEANROOM-RESETTER",
+  "brief_chars": 3216,
+  "channels": {
+    "spark": {
+      "channel": "spark",
+      "model": "muse-spark-1.1",
+      "tier": "deep",
+      "ok": true,
+      "seconds": 72.4,
+      "input_tokens": 157360,
+      "output_tokens": 7468,
+      "tool_calls": 14,
+      "stop_reason": "end_turn",
+      "block_types": [
+        "redacted_thinking",
+        "server_tool_use",
+        "text"
+      ],
+      "output_bytes": 10145,
+      "marker_at_end": true,
+      "marker_unique": true,
+      "failures": [],
+      "notes": [
+        "output_tokens=7468 is below the diagnostic floor 25000 for tier deep"
+      ]
+    },
+    "gemini": {
+      "channel": "gemini",
+      "model": "gemini-3.1-pro-high",
+      "ok": true,
+      "seconds": 13.7,
+      "input_tokens": null,
+      "output_tokens": null,
+      "tool_calls": null,
+      "stop_reason": null,
+      "exit": 0,
+      "output_bytes": 9579,
+      "marker_at_end": true,
+      "marker_unique": true,
+      "failures": [],
+      "notes": []
+    }
+  }
+}
