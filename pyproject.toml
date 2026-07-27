@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "codex-reset-credit-manager"
 version = "0.1.0"
-description = "Private read-only draft of a Windows-first Codex reset credit manager."
+description = "Public read-only MVP of a Windows-first Codex reset credit manager."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

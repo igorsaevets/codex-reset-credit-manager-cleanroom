@@ -4,7 +4,7 @@
 
 | Topic | This draft |
 | --- | --- |
-| Publication | Starts private |
+| Publication | Public read-only MVP with explicit provenance caveat |
 | Legal posture | Assumes no reuse rights from an unlicensed public repo |
 | Existing machine state | Explicitly leaves the current paused install alone |
 | Live behavior | Deferred |
@@ -18,4 +18,3 @@
 - Separate isolated root: `%LOCALAPPDATA%\\CodexResetCreditDraft`
 - No attempt to mirror the legacy installer's runtime layout
 - No direct dependence on a real reset-credit response schema yet
-

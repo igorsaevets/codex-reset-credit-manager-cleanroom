@@ -88,7 +88,7 @@ Decide whether a user-initiated live path should exist at all.
 
 ### Questions that must be answered first
 
-- Is publication posture resolved enough for a public release?
+- Is publication posture resolved enough for broader claims or wider adoption?
 - Is there a terms-compliant way to present live redemption without implying rate-limit bypass?
 - Is the supported app-server contract stable enough for a local tool?
 - Can the repository separate read-only and mutating capabilities cleanly?
@@ -138,7 +138,7 @@ Scheduler activation multiplies the blast radius. It interacts with sleep/wake t
 
 The repository is strongest when described as:
 
-- a private draft
+- a public preview
 - a fresh reimplementation
 - a Windows-first planning and isolation toolkit
 - a repository that earns future capability step by step

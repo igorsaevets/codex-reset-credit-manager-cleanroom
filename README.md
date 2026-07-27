@@ -1,12 +1,12 @@
-# Codex Reset Credit Manager (Private Draft)
+# Codex Reset Credit Manager
 
 Windows-first, safety-first planning and isolation toolkit for Codex reset-credit workflows.
 
-This repository is a fresh private draft for a read-only MVP. It does not consume a reset credit, does not register a Scheduled Task, does not call private backend endpoints, and does not modify the paused third-party installation already present on the author's laptop.
+This repository is a public read-only MVP. It does not consume a reset credit, does not register a Scheduled Task, does not call private backend endpoints, and does not modify the paused third-party installation already present on the author's laptop.
 
 ## Status
 
-- Repository visibility: private
+- Project status: public preview
 - Milestone: read-only MVP
 - Existing laptop installation: intentionally untouched
 - Live `consume` support: not implemented
@@ -14,13 +14,13 @@ This repository is a fresh private draft for a read-only MVP. It does not consum
 
 ## Why this repository exists
 
-This draft exists to solve the parts that are easy to get wrong before any live reset behavior is even considered:
+This repository exists to solve the parts that are easy to get wrong before any live reset behavior is even considered:
 
 - filesystem isolation from a legacy local install
 - strict child-process environment scrubbing
 - deterministic expiry planning
 - inspectable Windows Task Scheduler XML preview instead of silent task registration
-- provenance-first documentation before any public release
+- explicit provenance documentation for public use
 
 It also deliberately avoids the path taken by many public experiments: calling private reset-credit endpoints directly or reading local auth state in ad hoc ways. The long-term intent, if the project ever grows beyond this MVP, is to stay on documented Codex surfaces such as [`codex app-server`](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md).
 
@@ -42,18 +42,18 @@ It also deliberately avoids the path taken by many public experiments: calling p
 - no auth-file scraping helper
 - no writes into the existing `%LOCALAPPDATA%\CodexResetCredit` install
 
-## Why this draft is different
+## Why this repository is different
 
 This is not positioned as a “quota bypass” tool or a full auto-reset manager. Right now it is a hardening and planning foundation.
 
-| Area | Typical public reset helper direction | This private draft |
+| Area | Typical public reset helper direction | This repository |
 | --- | --- | --- |
 | Scope | End-to-end reset flow | Read-only planning and isolation only |
 | Child environment | Often inherits ambient shell state | Small allowlist plus explicit `CODEX_HOME` isolation |
 | Scheduler behavior | Real registration or background automation | XML preview only |
 | Existing local install | May reuse or mutate it | Explicitly treated as external and untouched |
 | Backend surface | Private endpoints are common | Future work is intended to stay on documented app-server surfaces |
-| Publication posture | Public-first | Private draft first, with provenance gate |
+| Publication posture | Public-first | Public read-only MVP with an explicit provenance caveat |
 
 More detail: [docs/upstream-differences.md](docs/upstream-differences.md), [docs/provenance.md](docs/provenance.md)
 
@@ -90,7 +90,7 @@ python -m unittest discover -s tests -v
 
 ## Provenance note
 
-This repository is best described as a fresh private reimplementation draft, not yet as a formally isolated legal clean-room deliverable. Earlier evaluation work included reading an unlicensed third-party repository, so publication still requires an explicit provenance decision. That is why this repository remains private today.
+This repository is best described as an independently written public preview, not as a formally isolated legal clean-room deliverable. Earlier evaluation work included reading an unlicensed third-party repository, so this project keeps an explicit provenance caveat instead of claiming strict clean-room certification.
 
 See [docs/provenance.md](docs/provenance.md) for the exact caveat and release options.
 
@@ -107,4 +107,4 @@ Full plan: [docs/roadmap.md](docs/roadmap.md)
 
 ## Non-affiliation
 
-This project is an independent draft and is not affiliated with OpenAI or GitHub.
+This project is an independent open-source project and is not affiliated with OpenAI or GitHub.

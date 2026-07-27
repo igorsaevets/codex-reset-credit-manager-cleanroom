@@ -1,5 +1,8 @@
 # Strategic Review - 2026-07-26
 
+This document is a historical pre-publication snapshot from July 26, 2026. It
+records the recommendation at that time, before the repository was made public.
+
 ## Inputs
 
 - External reviewer 1: Muse Spark (`muse-spark-1.1`, tier `deep`)
@@ -33,4 +36,3 @@
 
 This repository stays private and read-only for now. The current codebase is a
 safe planning and hardening draft, not a public release candidate.
-

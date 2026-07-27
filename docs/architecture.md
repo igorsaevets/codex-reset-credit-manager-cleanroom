@@ -15,7 +15,7 @@ This repository currently implements a read-only foundation for a future-safe Co
 
 ## Provenance boundary
 
-This repository is a fresh private reimplementation draft. It should not be presented as a formally isolated legal clean-room deliverable yet, because earlier evaluation work included reading an unlicensed third-party repository. That matters for publication strategy, not for the technical boundaries below.
+This repository is an independently written public preview. It should not be presented as a formally isolated legal clean-room deliverable, because earlier evaluation work included reading an unlicensed third-party repository. That matters for provenance wording, not for the technical boundaries below.
 
 ## System boundaries
 
@@ -156,7 +156,7 @@ That means the likely order is:
 
 ## Release gates
 
-Before any public or live-feature transition, this repository should pass all of the following:
+Before any live-feature transition or materially broader product claim, this repository should pass all of the following:
 
 1. provenance decision for publication
 2. terms-risk review for any live behavior
