@@ -88,6 +88,8 @@ flowchart TD
 
 The child environment is intentionally small. The current allowlist preserves only machine and shell basics such as `PATH`, `SYSTEMROOT`, `TEMP`, and user profile paths. It does not forward arbitrary API keys, model tokens, or unrelated auth state.
 
+Crucially, environment construction and preview only read values for allowlisted variables. For non-allowlisted (stripped) variables, the implementation only observes variable names when diffing environment state; non-allowlisted secret values are never read into memory for forwarding, logged, or transmitted anywhere.
+
 The child environment then adds:
 
 - `CODEX_HOME=<draft-root>/codex-home`

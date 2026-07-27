@@ -28,19 +28,24 @@ It also deliberately avoids the path taken by many public experiments: calling p
 
 - builds an isolated root under `%LOCALAPPDATA%\CodexResetCreditDraft`
 - forces a separate `CODEX_HOME` and `CODEX_SQLITE_HOME` for child processes
-- keeps only a small allowlist of ambient environment variables
+- keeps only a small allowlist of ambient environment variables and only reads values for allowlisted variables
+- observes non-allowlisted environment variables by name only without reading their values into memory
 - computes warmup, validation, and dispatch checkpoints from an expiry timestamp
 - renders one-time Scheduled Task XML for inspection only
-- ships unit tests for environment scrubbing, planning windows, and XML preview generation
+- ships unit tests for environment scrubbing, secret non-materialization, planning windows, and XML preview generation
 
 ## What this MVP does not do
 
-- no live `account/rateLimitResetCredit/consume`
+- no live `account/rateLimitResetCredit/consume` path
 - no automatic credit redemption
 - no Scheduled Task registration
-- no direct `/backend-api/wham/*` calls
+- no direct private backend HTTP calls (such as `/backend-api/wham/*`)
 - no auth-file scraping helper
+- no transmission of API key or token values anywhere
+- no logging or forwarding of unrelated secret values into child processes
 - no writes into the existing `%LOCALAPPDATA%\CodexResetCredit` install
+
+For a complete guide to repository organization, codebase orientation, and legacy differences, see [docs/repository-guide.md](docs/repository-guide.md).
 
 ## Why this repository is different
 
@@ -49,16 +54,17 @@ This is not positioned as a “quota bypass” tool or a full auto-reset manager
 | Area | Typical public reset helper direction | This repository |
 | --- | --- | --- |
 | Scope | End-to-end reset flow | Read-only planning and isolation only |
-| Child environment | Often inherits ambient shell state | Small allowlist plus explicit `CODEX_HOME` isolation |
+| Child environment | Often inherits ambient shell state | Small allowlist; non-allowlisted secret values are never read or forwarded |
 | Scheduler behavior | Real registration or background automation | XML preview only |
 | Existing local install | May reuse or mutate it | Explicitly treated as external and untouched |
 | Backend surface | Private endpoints are common | Future work is intended to stay on documented app-server surfaces |
 | Publication posture | Public-first | Public read-only MVP with an explicit provenance caveat |
 
-More detail: [docs/upstream-differences.md](docs/upstream-differences.md), [docs/provenance.md](docs/provenance.md)
+More detail: [docs/repository-guide.md](docs/repository-guide.md), [docs/upstream-differences.md](docs/upstream-differences.md), [docs/provenance.md](docs/provenance.md)
 
 ## Repository map
 
+- [docs/repository-guide.md](docs/repository-guide.md) — complete user-facing orientation and repository guide
 - [docs/architecture.md](docs/architecture.md) — current design, trust boundaries, and threat model
 - [docs/roadmap.md](docs/roadmap.md) — phased plan from read-only MVP to any future gated capabilities
 - [docs/provenance.md](docs/provenance.md) — publication and derivative-risk caveats

@@ -31,10 +31,10 @@ def build_child_environment(
     *,
     isolated_codex_home: Path,
 ) -> dict[str, str]:
-    source = dict(base_env or os.environ)
+    env = os.environ if base_env is None else base_env
     child: dict[str, str] = {}
     for key in sorted(_ALLOWLIST):
-        value = source.get(key)
+        value = env.get(key)
         if value:
             child[key] = value
     child["CODEX_HOME"] = str(isolated_codex_home)
@@ -48,9 +48,10 @@ def diff_environment_names(
     *,
     isolated_codex_home: Path,
 ) -> tuple[list[str], list[str]]:
-    source = dict(base_env or os.environ)
-    child = build_child_environment(source, isolated_codex_home=isolated_codex_home)
+    env = os.environ if base_env is None else base_env
+    child = build_child_environment(env, isolated_codex_home=isolated_codex_home)
     kept = sorted(child)
-    stripped = sorted(name for name in source if name not in child)
+    stripped = sorted(name for name in env if name not in child)
     return kept, stripped
+
 
