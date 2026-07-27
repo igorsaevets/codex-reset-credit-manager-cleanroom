@@ -26,18 +26,21 @@ Status: current
 
 ## Phase 1 — Read-only observability
 
-Status: proposed
+Status: completed
 
 ### Objective
 
 Add optional, documented-surface read-only visibility through `codex app-server` without introducing any live mutation path.
 
-### Candidate features
+### Implemented features
 
-- opt-in `account/rateLimits/read` adapter over `codex app-server --stdio`
+- `observe-rate-limits` CLI command behind an explicit `--allow-live-read` opt-in flag
+- `account/rateLimits/read` and `account/read` adapter over `codex app-server --stdio`
 - normalized parsing of available reset-credit counts and detail rows when the backend provides them
-- local audit artifact showing what was observed and what was intentionally not inferred
-- version and capability probe for the local `codex` binary
+- timestamp flexible parsing (supporting Unix seconds/ms, numeric strings, ISO strings)
+- raw account email masking (`g***@example.com`)
+- child process environment drift detection (`codexHome` vs expected `CODEX_HOME`)
+- deterministic fake app-server test suite for all edge cases
 
 ### Non-goals
 
@@ -47,9 +50,9 @@ Add optional, documented-surface read-only visibility through `codex app-server`
 
 ### Exit criteria
 
-- strictly read-only tests with no live side effects
-- clear fallback behavior when detailed reset-credit rows are unavailable
-- docs explain the difference between `availableCount` and any returned detail rows
+- strictly read-only tests with no live side effects (achieved)
+- clear fallback behavior when detailed reset-credit rows are unavailable (achieved)
+- docs explain the difference between `availableCount` and any returned detail rows (achieved)
 
 ## Phase 2 — Operator-in-the-loop planning artifacts
 

@@ -25,6 +25,7 @@ This repository is an independently written public preview. It should not be pre
 - isolated child `CODEX_HOME`
 - isolated child `CODEX_SQLITE_HOME`
 - environment-name allowlist
+- Phase 1 read-only app-server observability adapter (`observe-rate-limits`) using documented RPC methods (`initialize`, `initialized`, `account/read`, `account/rateLimits/read`)
 - expiry checkpoint planning
 - read-only Scheduled Task XML rendering
 - unit tests for the above
@@ -50,7 +51,7 @@ This repository is an independently written public preview. It should not be pre
 
 - the ambient shell environment, which is treated as overshared and filtered
 - the presence of a `codex` binary on `PATH`
-- any future read-only response from `codex app-server`
+- read-only response objects returned by `codex app-server --stdio`
 
 ### Untrusted or protected areas
 
@@ -67,10 +68,12 @@ flowchart TD
     CLI --> Config["config.py\nresolve draft root and legacy root"]
     CLI --> Planner["planner.py\ncompute expiry checkpoints"]
     CLI --> Env["sanitized_env.py\nallowlist child environment"]
+    CLI --> AppServer["app_server.py\nread-only stdio RPC adapter"]
     CLI --> Task["task_preview.py\nrender XML preview only"]
     Config --> Draft["Draft root\n%LOCALAPPDATA%/CodexResetCreditDraft"]
     Config -. observe only .-> Legacy["Legacy root\n%LOCALAPPDATA%/CodexResetCredit"]
-    Env --> Child["Future child process\nisolated CODEX_HOME"]
+    Env --> Child["Child process\nisolated CODEX_HOME"]
+    AppServer --> Child
     Task --> Xml["Inspectable Task Scheduler XML"]
 ```
 
@@ -80,9 +83,10 @@ flowchart TD
 | --- | --- | --- |
 | `config.py` | Resolves draft root, child Codex home, legacy install root, and optional `codex` binary path | Keeps draft state separate from the known legacy install path |
 | `sanitized_env.py` | Builds a child-process environment from a small allowlist | Prevents unrelated tokens and secrets from being inherited by default |
+| `app_server.py` | Executes stdio JSONL handshake and read RPCs (`account/read`, `account/rateLimits/read`) | strictly read-only, masks emails, parses timestamps flexibly, detects environment drift |
 | `planner.py` | Computes warmup, validation, and dispatch timestamps from expiry | Pure function; easy to test without network or auth |
 | `task_preview.py` | Renders one-time Scheduled Task XML | Generates inspectable output without touching Task Scheduler |
-| `cli.py` | Exposes `doctor`, `env-preview`, `plan`, `preview-task`, `dry-run` | Keeps the current user experience read-only |
+| `cli.py` | Exposes `doctor`, `env-preview`, `plan`, `preview-task`, `dry-run`, `observe-rate-limits` | Requires `--allow-live-read` opt-in flag for live observation |
 
 ## Environment scrubbing model
 

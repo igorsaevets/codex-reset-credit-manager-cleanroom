@@ -13,7 +13,8 @@ This repository represents a public read-only MVP (Minimum Viable Product). It i
 - **Selective Secret Value Access**: Only reads environment values for allowlisted variables. Ambient non-allowlisted secrets (e.g., `OPENAI_API_KEY`, `HF_TOKEN`) are observed strictly by key name when diffing environment state and are never read into memory for forwarding, logged, or sent anywhere.
 - **Deterministic Expiry Checkpoint Planning**: Calculates warmup, validation, and dispatch windows relative to a target UTC expiry timestamp without requiring live network or account state.
 - **Scheduled Task XML Preview**: Renders valid, inspectable Windows Task Scheduler XML for preview and audit purposes without registering or scheduling any background tasks.
-- **Read-Only CLI Toolkit**: Provides `doctor`, `env-preview`, `plan`, `preview-task`, and `dry-run` commands for diagnostic and verification workflows.
+- **Read-Only App-Server Observability**: Provides Phase 1 live read-only observation (`observe-rate-limits`) over `codex app-server --stdio` using documented read methods (`initialize`, `initialized`, `account/read`, `account/rateLimits/read`) behind an explicit `--allow-live-read` opt-in flag.
+- **Read-Only CLI Toolkit**: Provides `doctor`, `env-preview`, `observe-rate-limits`, `plan`, `preview-task`, and `dry-run` commands for diagnostic and verification workflows.
 
 ## What This Repository Does NOT Do
 
@@ -33,7 +34,7 @@ If you are familiar with older legacy repositories or installed legacy reset hel
 | **Architecture** | Manager, guard, auto-installer, and task runner modules | Read-only CLI toolkit with modular single-responsibility helpers |
 | **Child Environment** | Forwarded ambient shell environment (potentially leaking tokens) | Minimal allowlist; non-allowlisted secret values are never read or forwarded |
 | **Scheduler** | Active installation and execution of Windows Scheduled Tasks | XML preview generation for inspection only |
-| **Execution Surface** | Direct consumption / private backend interactions | Read-only planning transforms; future plans prioritize documented app-server endpoints |
+| **Execution Surface** | Direct consumption / private backend interactions | Documented `codex app-server --stdio` read-only RPCs (`account/rateLimits/read`, `account/read`) |
 | **Legacy Install Handling** | Modified local state directly | Strictly treated as external and untouched |
 
 ## Repository Structure
@@ -44,10 +45,11 @@ Key directories and files:
   - `cli.py`: Command-line interface definition and command dispatch
   - `config.py`: Resolves draft root paths, legacy install root, and local binaries
   - `sanitized_env.py`: Environment allowlisting and diffing logic
+  - `app_server.py`: Read-only transport and normalization client for `codex app-server --stdio`
   - `planner.py`: Pure timestamp planning calculations for expiry checkpoints
   - `task_preview.py`: Windows Task Scheduler XML rendering
-  - `models.py`: Dataclass models for diagnostic reports and planning windows
-- `tests/`: Unit test suite verifying environment scrubbing, planning logic, task preview XML, and isolation
+  - `models.py`: Dataclass models for diagnostic reports, observation reports, and planning windows
+- `tests/`: Unit test suite verifying environment scrubbing, planning logic, app-server read-only adapter, task preview XML, and isolation
 - `docs/`: Comprehensive technical and policy documentation
   - `architecture.md`: System design, threat model, and trust boundaries
   - `provenance.md`: Cleanroom provenance context and derivative-risk notes

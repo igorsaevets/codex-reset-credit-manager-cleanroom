@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import sys
 from dataclasses import asdict
 from pathlib import Path
 
 from . import __version__
+from .app_server import (
+    AppServerObservationError,
+    observe_app_server_rate_limits,
+    parse_codex_binary_command,
+)
 from .config import AppConfig, load_config
 from .models import DoctorFinding, DoctorReport
 from .planner import build_planning_windows, parse_utc_timestamp
@@ -111,6 +117,11 @@ def _build_parser() -> argparse.ArgumentParser:
     dry_run = commands.add_parser("dry-run", help="print the intended read-only workflow")
     dry_run.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     dry_run.add_argument("--expires-at", required=True, help="UTC timestamp, for example 2026-08-02T12:00:00Z")
+
+    observe = commands.add_parser("observe-rate-limits", help="query live codex app-server read-only rate limits")
+    observe.add_argument("--allow-live-read", action="store_true", help="explicit opt-in flag required for live read-only observation")
+    observe.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    observe.add_argument("--codex-binary", help="override path to codex binary or app-server stub")
     return parser
 
 
@@ -200,6 +211,43 @@ def main(argv: list[str] | None = None) -> int:
         print("Next steps:")
         for step in payload["nextSteps"]:
             print(f"  - {step}")
+        return 0
+
+    if args.command == "observe-rate-limits":
+        if not args.allow_live_read:
+            sys.stderr.write("Error: Live observation requires explicit opt-in. Re-run with --allow-live-read.\n")
+            return 1
+        try:
+            cmd_override = None
+            if args.codex_binary:
+                cmd_override = parse_codex_binary_command(args.codex_binary)
+            report = observe_app_server_rate_limits(config, command_override=cmd_override)
+        except AppServerObservationError as exc:
+            sys.stderr.write(f"Observation failed: {exc}\n")
+            return 1
+
+        if args.json:
+            return _print_json(asdict(report))
+
+        print("Phase 1 App-Server Read-Only Observation:")
+        print(f"  Mode:                {report.mode}")
+        print(f"  Live Read Allowed:   {report.live_read_allowed}")
+        print(f"  User Agent:          {report.handshake.user_agent or 'unknown'}")
+        print(f"  Codex Home:          {report.handshake.codex_home or 'unknown'}")
+        print(f"  CODEX_HOME Match:    {report.handshake.codex_home_matches_expected}")
+        print(f"  Account Auth Req:    {report.account.requires_openai_auth}")
+        print(f"  Account Email:       {report.account.email_masked or 'none/hidden'}")
+        print(f"  Account Plan:        {report.account.plan_type or 'unknown'}")
+        print(f"  Available Credits:   {report.rate_limits.available_count if report.rate_limits.available_count is not None else 'unknown'}")
+        print(f"  Detail Rows Count:   {report.rate_limits.detail_count}")
+        print(f"  Unlisted Credits:    {report.rate_limits.has_unlisted_credits}")
+
+        if report.rate_limits.credits:
+            print("  Credit Details:")
+            for c in report.rate_limits.credits:
+                print(f"    - ID: {c.id or 'unknown'} | Expires: {c.expires_at or 'unknown'} | Reset: {c.reset_type or 'unknown'} | Status: {c.status or 'unknown'}")
+        else:
+            print("  Credit Details:      none listed")
         return 0
 
     parser.error(f"unknown command: {args.command}")

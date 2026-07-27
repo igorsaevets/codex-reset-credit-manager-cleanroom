@@ -30,9 +30,10 @@ It also deliberately avoids the path taken by many public experiments: calling p
 - forces a separate `CODEX_HOME` and `CODEX_SQLITE_HOME` for child processes
 - keeps only a small allowlist of ambient environment variables and only reads values for allowlisted variables
 - observes non-allowlisted environment variables by name only without reading their values into memory
+- provides Phase 1 read-only app-server observability (`observe-rate-limits`) using documented surfaces (`initialize`, `initialized`, `account/read`, `account/rateLimits/read`) behind an explicit `--allow-live-read` opt-in flag
 - computes warmup, validation, and dispatch checkpoints from an expiry timestamp
 - renders one-time Scheduled Task XML for inspection only
-- ships unit tests for environment scrubbing, secret non-materialization, planning windows, and XML preview generation
+- ships unit tests for environment scrubbing, secret non-materialization, planning windows, app-server read-only adapter, and XML preview generation
 
 ## What this MVP does not do
 
@@ -57,7 +58,7 @@ This is not positioned as a “quota bypass” tool or a full auto-reset manager
 | Child environment | Often inherits ambient shell state | Small allowlist; non-allowlisted secret values are never read or forwarded |
 | Scheduler behavior | Real registration or background automation | XML preview only |
 | Existing local install | May reuse or mutate it | Explicitly treated as external and untouched |
-| Backend surface | Private endpoints are common | Future work is intended to stay on documented app-server surfaces |
+| Backend surface | Private endpoints are common | Documented `codex app-server --stdio` read-only RPCs only |
 | Publication posture | Public-first | Public read-only MVP with an explicit provenance caveat |
 
 More detail: [docs/repository-guide.md](docs/repository-guide.md), [docs/upstream-differences.md](docs/upstream-differences.md), [docs/provenance.md](docs/provenance.md)
@@ -79,6 +80,7 @@ More detail: [docs/repository-guide.md](docs/repository-guide.md), [docs/upstrea
 python -m pip install -e .[dev]
 python -m codex_reset_credit_manager doctor
 python -m codex_reset_credit_manager env-preview
+python -m codex_reset_credit_manager observe-rate-limits --allow-live-read
 python -m codex_reset_credit_manager plan --expires-at 2026-08-02T12:00:00Z
 python -m codex_reset_credit_manager preview-task `
   --run-at 2026-08-02T11:58:40Z `
