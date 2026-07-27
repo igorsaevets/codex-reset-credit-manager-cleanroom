@@ -13,6 +13,7 @@ design, test, CI, or review.
 3. **No live consume path**: There is no live reset consumption or automatic credit redemption logic.
 4. **Scrubbed child environment**: Ambient environment values are not forwarded by default. The environment builder only reads values for a minimal allowlist of system variables (such as `PATH`, `TEMP`, `SYSTEMROOT`).
 5. **No secret materialization**: Ambient non-allowlisted environment variables are observed strictly by key name when diffing environment state; their values are never read into memory for forwarding, logged, or sent anywhere.
+6. **No secrets in planning artifacts**: Phase 1.5 planning-ledger documents or future dry-run artifacts must not contain API keys, token values, raw cookies, auth-file contents, or unrelated credential material.
 
 ## Hard rules
 
@@ -29,4 +30,3 @@ If you find a security issue, avoid posting exploit details publicly at first.
 Open a minimal issue without sensitive proof-of-concept material or contact the
 maintainer privately first. Do not publish proof-of-concept code that can
 trigger a live reset or expose credentials.
-

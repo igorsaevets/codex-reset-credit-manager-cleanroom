@@ -6,12 +6,15 @@
 
 This repository represents a public read-only MVP (Minimum Viable Product). It is designed to establish strong safety boundaries, deterministic planning, and environment sanitization before any live consumption or mutation path is considered.
 
+The current documentation focus is Phase 1.5: defining the planning-ledger layer and aligning the repository's public wording with its actual read-only scope.
+
 ## What This Repository Currently Does
 
 - **Isolated State Management**: Resolves an isolated draft root under `%LOCALAPPDATA%\CodexResetCreditDraft`, keeping all state separate from existing local installations.
 - **Strict Environment Scrubbing**: Generates sanitized child process environments containing only a minimal allowlist of necessary system variables (`PATH`, `SYSTEMROOT`, `TEMP`, etc.) and sets explicit `CODEX_HOME` and `CODEX_SQLITE_HOME` paths.
 - **Selective Secret Value Access**: Only reads environment values for allowlisted variables. Ambient non-allowlisted secrets (e.g., `OPENAI_API_KEY`, `HF_TOKEN`) are observed strictly by key name when diffing environment state and are never read into memory for forwarding, logged, or sent anywhere.
 - **Deterministic Expiry Checkpoint Planning**: Calculates warmup, validation, and dispatch windows relative to a target UTC expiry timestamp without requiring live network or account state.
+- **Planning-Ledger Specification**: Defines a static Phase 1.5 artifact shape for operator-reviewed expiry planning, timezone comparison, and future dry-run reporting without introducing any execution engine.
 - **Scheduled Task XML Preview**: Renders valid, inspectable Windows Task Scheduler XML for preview and audit purposes without registering or scheduling any background tasks.
 - **Read-Only App-Server Observability**: Provides Phase 1 live read-only observation (`observe-rate-limits`) over `codex app-server --stdio` using documented read methods (`initialize`, `initialized`, `account/read`, `account/rateLimits/read`) behind an explicit `--allow-live-read` opt-in flag.
 - **Read-Only CLI Toolkit**: Provides `doctor`, `env-preview`, `observe-rate-limits`, `plan`, `preview-task`, and `dry-run` commands for diagnostic and verification workflows.
@@ -24,6 +27,7 @@ This repository represents a public read-only MVP (Minimum Viable Product). It i
 - **No Auth Scraping**: Does not scrape local browser storage, tokens, or credential files.
 - **No Legacy Installation Mutation**: Intentionally leaves any pre-existing legacy installation at `%LOCALAPPDATA%\CodexResetCredit` untouched.
 - **No Secret Transmission**: Does not send API keys, credentials, or token values anywhere.
+- **No Ledger Execution Engine**: Does not watch, process, or execute planning-ledger artifacts in the background.
 
 ## Differences from Legacy Implementations
 
@@ -52,6 +56,7 @@ Key directories and files:
 - `tests/`: Unit test suite verifying environment scrubbing, planning logic, app-server read-only adapter, task preview XML, and isolation
 - `docs/`: Comprehensive technical and policy documentation
   - `architecture.md`: System design, threat model, and trust boundaries
+  - `planning-ledger.md`: Phase 1.5 planning-ledger specification and artifact rules
   - `provenance.md`: Cleanroom provenance context and derivative-risk notes
   - `roadmap.md`: Phased roadmap from read-only MVP to potential future gated features
   - `upstream-differences.md`: Detailed comparison with legacy reset tools

@@ -11,7 +11,7 @@ This repository currently implements a read-only foundation for a future-safe Co
 3. prevent ambient secret inheritance into child processes
 4. make planning logic deterministic and testable without account access
 5. preview Windows task behavior without registering anything
-6. keep the architecture compatible with documented Codex surfaces if a future read-only adapter is added
+6. keep the architecture compatible with documented Codex surfaces and a future operator-reviewed planning ledger
 
 ## Provenance boundary
 
@@ -27,6 +27,7 @@ This repository is an independently written public preview. It should not be pre
 - environment-name allowlist
 - Phase 1 read-only app-server observability adapter (`observe-rate-limits`) using documented RPC methods (`initialize`, `initialized`, `account/read`, `account/rateLimits/read`)
 - expiry checkpoint planning
+- Phase 1.5 planning-ledger specification and operator review model
 - read-only Scheduled Task XML rendering
 - unit tests for the above
 
@@ -69,6 +70,8 @@ flowchart TD
     CLI --> Planner["planner.py\ncompute expiry checkpoints"]
     CLI --> Env["sanitized_env.py\nallowlist child environment"]
     CLI --> AppServer["app_server.py\nread-only stdio RPC adapter"]
+    Planner -. informs future spec .-> Ledger["Planning Ledger Spec\ndocs/planning-ledger.md (doc only)"]
+    AppServer -. informs future spec .-> Ledger
     CLI --> Task["task_preview.py\nrender XML preview only"]
     Config --> Draft["Draft root\n%LOCALAPPDATA%/CodexResetCreditDraft"]
     Config -. observe only .-> Legacy["Legacy root\n%LOCALAPPDATA%/CodexResetCredit"]
@@ -118,6 +121,17 @@ The constraints are also explicit:
 
 This lets the team reason about future execution windows without touching any real credit state.
 
+## Phase 1.5 planning-ledger model
+
+The next layer is deliberately still non-executable. A planning ledger is a static, operator-reviewed artifact shape that ties together:
+
+- a chosen expiry target
+- the checkpoint timestamps derived from that target
+- any read-only observations that justify the target
+- human review notes before any future action path is even considered
+
+The important boundary is that the repository currently specifies this artifact; it does not yet generate or execute it automatically.
+
 ## Scheduler-preview model
 
 The repository currently renders XML for a one-time Windows task with the following important properties:
@@ -139,6 +153,7 @@ The last point is the important one. Preview generation is documentation and ins
 3. hidden scheduler side effects during local testing
 4. documentation drift that makes a read-only repo look like a live reset bot
 5. future coupling to undocumented private endpoints
+6. planning-ledger outputs being mistaken for an execution queue
 
 ### Risks intentionally deferred
 
@@ -157,8 +172,9 @@ If the project continues, the safest next adapter is a read-only one that talks 
 That means the likely order is:
 
 1. read-only observability
-2. planning ledger and audit artifacts
-3. only then a decision about whether a user-initiated `consume` path should exist
+2. planning-ledger specification and audit posture alignment
+3. non-mutating preview and dry-run artifacts
+4. only then a decision about whether a user-initiated `consume` path should exist
 
 ## Release gates
 

@@ -6,7 +6,7 @@ This roadmap is intentionally conservative. Each phase must earn the right to ex
 
 ## Phase 0 — Hardening foundation
 
-Status: current
+Status: completed
 
 ### Scope
 
@@ -54,20 +54,50 @@ Add optional, documented-surface read-only visibility through `codex app-server`
 - clear fallback behavior when detailed reset-credit rows are unavailable (achieved)
 - docs explain the difference between `availableCount` and any returned detail rows (achieved)
 
+## Phase 1.5 — Operator planning ledger and posture alignment
+
+Status: current
+
+### Objective
+
+Freeze the documentation shape for operator-reviewed planning artifacts and remove ambiguity between historical pre-publication notes and the current public read-only repository posture.
+
+### Scope
+
+- canonical planning-ledger specification for a chosen expiry target
+- explicit UTC and local-time rendering rules for future artifacts
+- public wording alignment across the repository front page and core documentation
+- historical-context framing for pre-publication review notes
+
+### Non-goals
+
+- no new executable workflow
+- no background processing of planning ledgers
+- no automatic task installation
+- no live reset attempt
+- no background daemon
+
+### Exit criteria
+
+- a canonical `docs/planning-ledger.md` exists
+- public documentation no longer implies the repository is still private
+- the operator planning-ledger concept is described without implying automation
+- security documentation states that planning-ledger artifacts must not contain credentials or token values
+
 ## Phase 2 — Operator-in-the-loop planning artifacts
 
 Status: proposed
 
 ### Objective
 
-Move from static timestamp planning to richer, auditable planning artifacts while remaining non-mutating.
+Move from static timestamp planning to richer, reproducible, non-mutating artifacts that follow the Phase 1.5 planning-ledger model.
 
 ### Candidate features
 
-- planning ledger format for a chosen expiry target
-- explicit timezone rendering and local/UTC comparison helpers
-- structured dry-run reports
+- structured dry-run reports derived from the planning-ledger shape
 - preview bundle for a future scheduled action without performing registration
+- explicit timezone rendering and local/UTC comparison helpers in generated artifacts
+- inspectable operator summary outputs for a chosen expiry target
 
 ### Non-goals
 

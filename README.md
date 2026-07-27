@@ -8,6 +8,7 @@ This repository is a public read-only MVP. It does not consume a reset credit, d
 
 - Project status: public preview
 - Milestone: read-only MVP
+- Current focus: Phase 1.5 planning ledger and posture alignment
 - Existing laptop installation: intentionally untouched
 - Live `consume` support: not implemented
 - Scheduler registration: not implemented
@@ -31,6 +32,7 @@ It also deliberately avoids the path taken by many public experiments: calling p
 - keeps only a small allowlist of ambient environment variables and only reads values for allowlisted variables
 - observes non-allowlisted environment variables by name only without reading their values into memory
 - provides Phase 1 read-only app-server observability (`observe-rate-limits`) using documented surfaces (`initialize`, `initialized`, `account/read`, `account/rateLimits/read`) behind an explicit `--allow-live-read` opt-in flag
+- includes Phase 1.5 planning-ledger documentation for future auditable dry-run artifacts
 - computes warmup, validation, and dispatch checkpoints from an expiry timestamp
 - renders one-time Scheduled Task XML for inspection only
 - ships unit tests for environment scrubbing, secret non-materialization, planning windows, app-server read-only adapter, and XML preview generation
@@ -44,6 +46,7 @@ It also deliberately avoids the path taken by many public experiments: calling p
 - no auth-file scraping helper
 - no transmission of API key or token values anywhere
 - no logging or forwarding of unrelated secret values into child processes
+- no background execution engine for planning ledgers or dry-run artifacts
 - no writes into the existing `%LOCALAPPDATA%\CodexResetCredit` install
 
 For a complete guide to repository organization, codebase orientation, and legacy differences, see [docs/repository-guide.md](docs/repository-guide.md).
@@ -68,6 +71,7 @@ More detail: [docs/repository-guide.md](docs/repository-guide.md), [docs/upstrea
 - [docs/repository-guide.md](docs/repository-guide.md) — complete user-facing orientation and repository guide
 - [docs/architecture.md](docs/architecture.md) — current design, trust boundaries, and threat model
 - [docs/roadmap.md](docs/roadmap.md) — phased plan from read-only MVP to any future gated capabilities
+- [docs/planning-ledger.md](docs/planning-ledger.md) — Phase 1.5 planning-ledger specification for future audit artifacts
 - [docs/provenance.md](docs/provenance.md) — publication and derivative-risk caveats
 - [docs/upstream-differences.md](docs/upstream-differences.md) — intentional differences from the previously studied legacy direction
 - [docs/strategic-review-2026-07-26.md](docs/strategic-review-2026-07-26.md) — prior strategic review snapshot
@@ -106,10 +110,11 @@ See [docs/provenance.md](docs/provenance.md) for the exact caveat and release op
 
 The short version:
 
-1. keep the current milestone read-only and auditable
-2. add optional read-only observability through supported app-server interfaces
-3. add operator-in-the-loop planning artifacts before any live action exists
-4. only then decide whether a user-initiated consume path or scheduler registration should exist at all
+1. Phase 0: establish isolation, deterministic planning, and XML preview without live side effects
+2. Phase 1: add optional read-only observability through supported app-server interfaces
+3. Phase 1.5: freeze the operator planning-ledger format and align public repository posture
+4. Phase 2: add non-mutating dry-run and preview artifacts that follow the Phase 1.5 ledger model
+5. only then decide whether a user-initiated consume path or scheduler registration should exist at all
 
 Full plan: [docs/roadmap.md](docs/roadmap.md)
 

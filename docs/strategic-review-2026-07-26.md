@@ -1,5 +1,11 @@
 # Strategic Review - 2026-07-26
 
+> [!NOTE]
+> Historical pre-publication snapshot.
+> This document preserves the July 26, 2026 recommendation before the repository was made public.
+> Statements below about keeping the repository private reflect that earlier moment in time, not the current public repository posture.
+> For the current status, see [README.md](../README.md).
+
 This document is a historical pre-publication snapshot from July 26, 2026. It
 records the recommendation at that time, before the repository was made public.
 
