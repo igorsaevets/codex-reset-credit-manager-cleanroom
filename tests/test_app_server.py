@@ -1,5 +1,6 @@
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -17,7 +18,9 @@ from codex_reset_credit_manager.config import AppConfig
 class AppServerReadTests(unittest.TestCase):
     def setUp(self) -> None:
         self.fake_script = str(Path(__file__).parent / "fake_app_server.py")
-        self.draft_root = Path(r"C:\DraftRoot")
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.draft_root = Path(self.temp.name) / "DraftRoot"
         self.child_codex_home = self.draft_root / "codex-home"
         self.config = AppConfig(
             root=self.draft_root,
@@ -76,6 +79,32 @@ class AppServerReadTests(unittest.TestCase):
         self.assertEqual(report.rate_limits.detail_count, 1)
         self.assertFalse(report.rate_limits.has_unlisted_credits)
         self.assertEqual(report.rate_limits.credits[0].id, "credit_default")
+        self.assertTrue(self.child_codex_home.is_dir())
+        self.assertTrue((self.child_codex_home / "sqlite").is_dir())
+
+    def test_existing_signed_in_home_override_is_used_without_copying_it(self) -> None:
+        signed_in_home = self.draft_root / "signed-in-codex-home"
+        signed_in_home.mkdir(parents=True)
+        cmd_override = [
+            sys.executable,
+            self.fake_script,
+            "--mode",
+            "normal",
+            "--codex-home",
+            str(signed_in_home),
+        ]
+        report = observe_app_server_rate_limits(
+            self.config,
+            command_override=cmd_override,
+            codex_home_override=signed_in_home,
+        )
+
+        self.assertTrue(report.handshake.codex_home_matches_expected)
+        self.assertEqual(
+            Path(report.handshake.codex_home).resolve(),
+            signed_in_home.resolve(),
+        )
+        self.assertFalse(self.child_codex_home.exists())
 
     def test_null_credits_object(self) -> None:
         cmd_override = [

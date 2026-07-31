@@ -2,8 +2,8 @@
 
 ## Current status
 
-This repository is a public read-only MVP that was written independently after
-earlier evaluation work on an unlicensed third-party repository.
+This repository is a public read-only expiry notifier and planning toolkit that
+was written independently after earlier evaluation work on an unlicensed third-party repository.
 
 ## What this repository does and does not claim
 
@@ -22,7 +22,7 @@ Why that caveat remains:
 Making the repository public means the code is openly visible and MIT-licensed
 for reuse on the terms of that license. It does not mean:
 
-- that the project is a full automation tool
+- that the project automates reset activation or redemption
 - that the project bypasses rate limits
 - that the project is certified as a strict clean-room implementation
 

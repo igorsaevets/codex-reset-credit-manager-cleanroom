@@ -4,6 +4,8 @@
 
 Phase 1.5 documentation artifact. This file defines the intended shape of future operator-reviewed planning artifacts. It does not introduce any execution path, scheduler registration, or live reset behavior.
 
+Version 0.2's optional expiry notifier is a separate read-only subsystem. It does not consume this document or any planning-ledger file as a task queue.
+
 ## Why this document exists
 
 Phase 0 and Phase 1 established isolation, deterministic checkpoint planning, and read-only observability. The next safe step is not automation. The next safe step is a canonical artifact shape that can be reviewed by a human before any future dry-run bundle or decision gate exists.
