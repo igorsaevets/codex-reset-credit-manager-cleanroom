@@ -17,6 +17,7 @@ from codex_reset_credit_manager.notifier import (
     NotifierError,
     StateStore,
     display_scheduled_notice,
+    notice_copy,
     notice_task_name,
     parse_expiry_utc,
     record_notifier_error,
@@ -385,9 +386,22 @@ class NotifierControllerTests(unittest.TestCase):
         self.assertIn(second, {"stale", "already_notified"})
         self.assertEqual(len(calls), 1)
         self.assertIn("Нажмите OK", calls[0][1])
+        self.assertIn(
+            "Осталось на момент открытия окна: 1 день, 0 часов, 0 минут, 0 секунд.",
+            calls[0][1],
+        )
         self.assertIn(self.expiry.strftime("%Y-%m-%d"), calls[0][1])
         self.assertNotIn("opaque", calls[0][1])
         self.assertEqual(self.store.load()["lastNotified"]["status"], "closed")
+
+    def test_english_copy_includes_days_hours_minutes_and_seconds(self) -> None:
+        expiry = NOW + timedelta(days=2, hours=1, minutes=2, seconds=3)
+        _, message = notice_copy(expiry, language="en", now_utc=NOW)
+        self.assertIn(
+            "Time remaining when this window opened: "
+            "2 days, 1 hour, 2 minutes, 3 seconds.",
+            message,
+        )
 
     def test_expired_notice_does_not_display(self) -> None:
         plan = synchronize_notifier(

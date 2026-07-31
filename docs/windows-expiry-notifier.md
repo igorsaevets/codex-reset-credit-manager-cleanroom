@@ -4,7 +4,7 @@
 
 The notifier answers one narrow question: **when will the nearest available Codex usage-limit reset activation expire?**
 
-It performs one read-only Codex app-server observation per day and turns the nearest complete `expiresAt` into a local Windows Task Scheduler reminder. The reminder appears 12 hours before expiry by default and remains open until the interactive user selects **OK** or closes it.
+It performs one read-only Codex app-server observation per day and turns the nearest complete `expiresAt` into a local Windows Task Scheduler reminder. The reminder shows the local and UTC expiry plus the days, hours, minutes, and seconds remaining when it opens. It appears 12 hours before expiry by default and remains open until the interactive user selects **OK** or closes it.
 
 The notifier has no reset-redemption implementation.
 
@@ -22,7 +22,7 @@ DailyCheck (network, once/day)
 Notice (local, once)
   -> verify fingerprint + saved expiry against local state
   -> refuse stale or expired notice
-  -> show top-most modal
+  -> show top-most modal with an expiry-time snapshot
   -> record sanitized receipt after OK/close
 ```
 
@@ -59,6 +59,8 @@ E - notification_target = 12 hours
 All subtraction occurs on timezone-aware UTC datetimes. Local formatting happens only for Task Scheduler XML and the visible message. This avoids DST arithmetic errors.
 
 The app-server currently exposes expiry at one-second precision. The notifier preserves that value and does not inspect a private backend to obtain fractional seconds.
+
+At display time, the child subtracts the current UTC instant from `expiresAt` and decomposes the non-negative result into days, hours, minutes, and seconds. This value is labeled as a snapshot because the standard modal text does not tick while the window remains open.
 
 If the daily controller first discovers the credit after `E - L`, it cannot notify in the past. It schedules the notice for `now + 15 seconds`, provided that instant remains before `E`.
 
@@ -105,7 +107,7 @@ Microsoft documents a default 10-minute queue delay when `StartWhenAvailable` ca
 
 ```powershell
 pwsh -NoProfile -File .\install-notifier.ps1 `
-  -Language ru `
+  -Language auto `
   -LeadHours 12 `
   -DailyAt 09:00 `
   -WhatIf
@@ -117,13 +119,22 @@ The preview resolves Python and validates Tkinter, but does not copy files or re
 
 ```powershell
 pwsh -NoProfile -File .\install-notifier.ps1 `
-  -Language ru `
+  -Language auto `
   -LeadHours 12 `
   -DailyAt 09:00 `
   -Confirm:$false
 ```
 
 Use `-PythonPath C:\absolute\path\python.exe` if automatic Python discovery selects the wrong installation.
+
+## Language selection
+
+The installer's default `-Language auto` is resolved once during installation:
+
+- Windows UI culture `ru-*` -> Russian
+- every other culture, including `en-US` -> English
+
+Use `-Language ru` or `-Language en` for an explicit override. Other translated message catalogs are not currently included.
 
 ## Verification
 

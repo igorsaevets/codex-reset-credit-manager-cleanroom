@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 - 2026-07-31
+
+- show days, hours, minutes, and seconds remaining when the modal opens
+- add correct Russian singular and plural forms for remaining-time units
+- default the Windows installer to automatic Russian/English UI-culture selection
+
 ## 0.2.0 - 2026-07-31
 
 - add an optional Windows expiry notifier

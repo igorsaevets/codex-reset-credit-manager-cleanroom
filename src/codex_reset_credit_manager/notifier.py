@@ -691,19 +691,79 @@ def _local_expiry_text(expires_at_utc: datetime) -> str:
     return f"{local:%Y-%m-%d %H:%M:%S} {zone} (UTC{formatted_offset})"
 
 
+def _russian_unit(value: int, singular: str, paucal: str, plural: str) -> str:
+    remainder_100 = value % 100
+    if 11 <= remainder_100 <= 14:
+        form = plural
+    else:
+        remainder_10 = value % 10
+        if remainder_10 == 1:
+            form = singular
+        elif 2 <= remainder_10 <= 4:
+            form = paucal
+        else:
+            form = plural
+    return f"{value} {form}"
+
+
+def _remaining_time_text(
+    expires_at_utc: datetime,
+    *,
+    now_utc: datetime,
+    language: str,
+) -> str:
+    if expires_at_utc.tzinfo is None or now_utc.tzinfo is None:
+        raise NotifierError("Remaining-time timestamps must be timezone-aware.")
+    remaining_seconds = max(
+        0,
+        int(
+            (
+                expires_at_utc.astimezone(timezone.utc)
+                - now_utc.astimezone(timezone.utc)
+            ).total_seconds()
+        ),
+    )
+    days, remainder = divmod(remaining_seconds, 24 * 60 * 60)
+    hours, remainder = divmod(remainder, 60 * 60)
+    minutes, seconds = divmod(remainder, 60)
+    if language == "ru":
+        return ", ".join(
+            (
+                _russian_unit(days, "день", "дня", "дней"),
+                _russian_unit(hours, "час", "часа", "часов"),
+                _russian_unit(minutes, "минута", "минуты", "минут"),
+                _russian_unit(seconds, "секунда", "секунды", "секунд"),
+            )
+        )
+    if language != "en":
+        raise NotifierError("language must be 'en' or 'ru'.")
+    values = ((days, "day"), (hours, "hour"), (minutes, "minute"), (seconds, "second"))
+    return ", ".join(
+        f"{value} {unit if value == 1 else unit + 's'}" for value, unit in values
+    )
+
+
 def notice_copy(
     expires_at_utc: datetime,
     *,
     language: str,
+    now_utc: datetime | None = None,
 ) -> tuple[str, str]:
     local_text = _local_expiry_text(expires_at_utc)
     utc_text = _utc_iso(expires_at_utc)
+    effective_now = now_utc or datetime.now(timezone.utc)
+    remaining_text = _remaining_time_text(
+        expires_at_utc,
+        now_utc=effective_now,
+        language=language,
+    )
     if language == "ru":
         return (
             "Codex: активация сброса скоро исчезнет",
             "Ближайшая сохранённая активация сброса лимитов Codex исчезнет:\n\n"
             f"{local_text}\n"
             f"{utc_text}\n\n"
+            f"Осталось на момент открытия окна: {remaining_text}.\n\n"
             "Это напоминание только читает срок действия. Оно не активирует и не расходует сброс.\n\n"
             "Нажмите OK или закройте окно.",
         )
@@ -714,6 +774,7 @@ def notice_copy(
         "Your nearest saved Codex usage-limit reset activation expires at:\n\n"
         f"{local_text}\n"
         f"{utc_text}\n\n"
+        f"Time remaining when this window opened: {remaining_text}.\n\n"
         "This reminder only reads the expiry. It does not activate or redeem a reset.\n\n"
         "Select OK or close this window.",
     )
@@ -779,7 +840,11 @@ def display_scheduled_notice(
         state["lastError"] = None
         store.save(state)
 
-    title, message = notice_copy(expires_at_utc, language=language)
+    title, message = notice_copy(
+        expires_at_utc,
+        language=language,
+        now_utc=now_utc,
+    )
     try:
         display(title, message)
     except Exception as exc:

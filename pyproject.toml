@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codex-reset-credit-manager"
-version = "0.2.0"
+version = "0.2.1"
 description = "Read-only Windows notifier for OpenAI Codex usage-limit reset expiry, with daily checks and a persistent 12-hour reminder."
 readme = "README.md"
 requires-python = ">=3.11"

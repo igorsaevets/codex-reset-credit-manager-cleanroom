@@ -4,7 +4,7 @@ Read-only Windows reminder for OpenAI Codex usage-limit reset expiry. It checks 
 
 > **Short answer:** this tool tells you the exact local date and time when the nearest saved Codex usage-limit reset expires. It does not activate, redeem, consume, create, or extend a reset.
 
-Version **0.2.0** adds the optional Windows expiry notifier while preserving the project's read-only boundary.
+Version **0.2.1** adds a localized remaining-time line and automatic Russian/English language selection while preserving the project's read-only boundary.
 
 ## What it does
 
@@ -15,7 +15,8 @@ Version **0.2.0** adds the optional Windows expiry notifier while preserving the
 - converts its timezone-aware `expiresAt` to the PC's local date, time, timezone, and UTC offset
 - runs one network check per day with Windows Task Scheduler
 - schedules one local, one-shot reminder at **T−12 hours**
-- displays a top-most modal dialog that remains until **OK** or the window's close button is selected
+- displays days, hours, minutes, and seconds remaining when the window opens
+- keeps the top-most modal visible until **OK** or the window's close button is selected
 - stores only a SHA-256 fingerprint, timestamps, task name, and sanitized status
 
 The daily controller and the one-shot reminder have different jobs:
@@ -50,7 +51,7 @@ Preview the installation without changing the PC:
 
 ```powershell
 pwsh -NoProfile -File .\install-notifier.ps1 `
-  -Language en `
+  -Language auto `
   -LeadHours 12 `
   -DailyAt 09:00 `
   -WhatIf
@@ -60,7 +61,7 @@ Install and activate the daily read-only check:
 
 ```powershell
 pwsh -NoProfile -File .\install-notifier.ps1 `
-  -Language en `
+  -Language auto `
   -LeadHours 12 `
   -DailyAt 09:00 `
   -Confirm:$false
@@ -77,6 +78,8 @@ pwsh -NoProfile -File .\install-notifier.ps1 `
 ```
 
 The installer performs one initial read-only check, then runs once per day. Pass `-SkipInitialCheck` if the first check should wait until the daily trigger.
+
+`-Language auto` is the default. It selects Russian for a Windows UI culture beginning with `ru` and English for the United States and every other currently unsupported language. Use `-Language ru` or `-Language en` to override it. The resolved language is stored during installation; reinstall after changing the Windows display language.
 
 ## Inspect without installing
 
@@ -118,6 +121,7 @@ python -m codex_reset_credit_manager notifier-status --json
 - **PC asleep:** the one-shot has `WakeToRun` and `StartWhenAvailable`. Firmware, battery policy, or disabled wake timers can prevent an exact wake, and Microsoft documents a default 10-minute queue delay for a late `StartWhenAvailable` run.
 - **User signed out:** the modal requires the same interactive Windows user. It is not shown on the secure desktop or to another account.
 - **Dialog left open:** its task has no execution time limit; the dialog remains until OK or close is selected.
+- **Remaining time:** the modal shows days, hours, minutes, and seconds remaining at the instant it opens. It is an accurate snapshot, not a live ticking counter.
 - **Timestamp precision:** the notifier displays the one-second precision exposed by `account/rateLimits/read`; it does not scrape a private backend for fractional seconds.
 - **Expired before display:** the child checks the saved UTC expiry locally and exits without showing stale information.
 - **Duplicate daily runs:** a lock, deterministic fingerprint, and deterministic task name prevent duplicate reminders for the same credit.
@@ -156,6 +160,10 @@ The controller intentionally checks once per day to minimize background activity
 
 No. The Windows dialog is modal and stays open until you select OK or close the window.
 
+### Which language will the notification use?
+
+The installer defaults to `auto`: Russian Windows UI uses Russian; American English and all other currently unsupported UI languages use English. Explicit `-Language ru` and `-Language en` settings always win. The project currently ships two translations, not arbitrary machine translation.
+
 ### Is this an official OpenAI tool?
 
 No. This is an independent open-source project and is not affiliated with or endorsed by OpenAI or GitHub.
@@ -179,7 +187,7 @@ python -m unittest discover -s tests -v
 git diff --check
 ```
 
-Tests cover exact 12-hour arithmetic, nearest-credit selection, incomplete inventory, late discovery, idempotent scheduling, stale-task replacement, expired notices, modal deduplication, state redaction, Task Scheduler XML, CLI opt-in, and a source-level absence check for reset-redemption RPCs.
+Tests cover exact 12-hour arithmetic, localized remaining-time rendering, nearest-credit selection, incomplete inventory, late discovery, idempotent scheduling, stale-task replacement, expired notices, modal deduplication, state redaction, Task Scheduler XML, CLI opt-in, and a source-level absence check for reset-redemption RPCs.
 
 ## Repository map
 

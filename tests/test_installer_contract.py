@@ -31,6 +31,10 @@ class WindowsInstallerContractTests(unittest.TestCase):
         self.assertIn("-Filter '*.py'", content)
         self.assertIn("'--dry-run'", content)
         self.assertIn("readiness probe", content.lower())
+        self.assertIn("[ValidateSet('auto', 'en', 'ru')]", content)
+        self.assertIn("[Globalization.CultureInfo]::CurrentUICulture.Name", content)
+        self.assertIn("-match '^ru(?:-|$)'", content)
+        self.assertIn("$resolvedLanguage", content)
         self.assertIn("'--account-codex-home'", content)
 
     def test_installer_action_has_no_redemption_endpoint(self) -> None:

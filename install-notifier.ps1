@@ -3,8 +3,8 @@ param(
     [ValidateRange(1, 168)]
     [int] $LeadHours = 12,
 
-    [ValidateSet('en', 'ru')]
-    [string] $Language = 'en',
+    [ValidateSet('auto', 'en', 'ru')]
+    [string] $Language = 'auto',
 
     [ValidatePattern('^\d{2}:\d{2}$')]
     [string] $DailyAt = '09:00',
@@ -135,6 +135,14 @@ if ([string]::IsNullOrWhiteSpace($AccountCodexHome)) {
 }
 $accountCodexHomeFull = Resolve-CanonicalDirectory -Path $AccountCodexHome -Description 'Signed-in Codex home'
 
+$resolvedLanguage = if ($Language -eq 'auto') {
+    if ([Globalization.CultureInfo]::CurrentUICulture.Name -match '^ru(?:-|$)') {
+        'ru'
+    } else {
+        'en'
+    }
+} else { $Language }
+
 $dailyTime = [TimeSpan]::ParseExact($DailyAt, 'hh\:mm', [Globalization.CultureInfo]::InvariantCulture)
 $installRootFull = [IO.Path]::GetFullPath($InstallRoot)
 $stateRoot = Join-Path $installRootFull 'state'
@@ -152,7 +160,7 @@ $arguments = @(
     '--lead-hours',
     [string] $LeadHours,
     '--language',
-    $Language,
+    $resolvedLanguage,
     '--task-prefix',
     $TaskPrefix,
     '--account-codex-home',
@@ -161,7 +169,7 @@ $arguments = @(
 $argumentLine = ($arguments | ForEach-Object { Quote-WindowsArgument -Value $_ }) -join ' '
 
 $description = "Read-only Codex reset-expiry check once per day. Schedules a persistent T-$LeadHours-hour modal reminder; never redeems a reset."
-$targetSummary = "$DailyTaskName at $DailyAt daily; reminder lead $LeadHours hours; language $Language"
+$targetSummary = "$DailyTaskName at $DailyAt daily; reminder lead $LeadHours hours; language $resolvedLanguage (mode $Language)"
 
 if (-not $PSCmdlet.ShouldProcess($targetSummary, 'Install and activate read-only notifier')) {
     [PSCustomObject]@{
@@ -169,7 +177,8 @@ if (-not $PSCmdlet.ShouldProcess($targetSummary, 'Install and activate read-only
         DailyTaskName = $DailyTaskName
         DailyAt = $DailyAt
         LeadHours = $LeadHours
-        Language = $Language
+        LanguageMode = $Language
+        Language = $resolvedLanguage
         Python = $python
         Pythonw = $pythonw
         AppRoot = $appRoot
@@ -199,7 +208,7 @@ $probeArguments = @(
     '--lead-hours',
     [string] $LeadHours,
     '--language',
-    $Language,
+    $resolvedLanguage,
     '--task-prefix',
     $TaskPrefix,
     '--account-codex-home',
@@ -236,7 +245,8 @@ $manifest = [ordered]@{
     dailyTaskName = $DailyTaskName
     dailyAtLocal = $DailyAt
     leadHours = $LeadHours
-    language = $Language
+    languageMode = $Language
+    language = $resolvedLanguage
     readOnly = $true
 }
 $manifest |
@@ -312,7 +322,8 @@ if (-not $SkipInitialCheck) {
     DailyTaskName = $DailyTaskName
     DailyAt = $DailyAt
     LeadHours = $LeadHours
-    Language = $Language
+    LanguageMode = $Language
+    Language = $resolvedLanguage
     Pythonw = $pythonw
     AppRoot = $appRoot
     StateRoot = $stateRoot
