@@ -2,16 +2,16 @@
 
 ## Intent
 
-This repository currently implements a read-only foundation for a future-safe Codex reset-credit workflow. The goal of the first milestone is not to redeem anything. The goal is to prove that isolation, planning, and documentation can be made trustworthy before any live mutation path exists.
+This repository implements a read-only Codex reset-credit expiry observer and an optional Windows reminder. It reads the server-provided expiry through Codex app-server and schedules a local dialog; it does not redeem anything.
 
 ## Design goals
 
 1. keep the existing `%LOCALAPPDATA%\CodexResetCredit` installation untouched
-2. isolate all new state under a separate draft root
+2. isolate all new state under a separate notifier or draft root
 3. prevent ambient secret inheritance into child processes
 4. make planning logic deterministic and testable without account access
-5. preview Windows task behavior without registering anything
-6. keep the architecture compatible with documented Codex surfaces and a future operator-reviewed planning ledger
+5. keep local reminder scheduling separate from any account mutation
+6. use only the Codex app-server read surface for live account observation
 
 ## Provenance boundary
 
@@ -27,6 +27,9 @@ This repository is an independently written public preview. It should not be pre
 - environment-name allowlist
 - Phase 1 read-only app-server observability adapter (`observe-rate-limits`) using documented RPC methods (`initialize`, `initialized`, `account/read`, `account/rateLimits/read`)
 - expiry checkpoint planning
+- nearest-available-credit validation and selection
+- one optional daily read-only Windows task
+- one deterministic local one-shot modal reminder at T−12 hours
 - Phase 1.5 planning-ledger specification and operator review model
 - read-only Scheduled Task XML rendering
 - unit tests for the above
@@ -34,10 +37,10 @@ This repository is an independently written public preview. It should not be pre
 ### Explicitly out of scope today
 
 - live `account/rateLimitResetCredit/consume`
-- Scheduled Task registration
+- scheduled reset activation or redemption
 - direct private backend HTTP
-- auth scraping helpers
-- background daemons
+- direct credential-file parsing or auth scraping helpers
+- frequent background polling or a resident daemon
 - mutation of the legacy local install
 
 ## Trust model
@@ -68,15 +71,19 @@ flowchart TD
     User["Operator"] --> CLI["CLI commands"]
     CLI --> Config["config.py\nresolve draft root and legacy root"]
     CLI --> Planner["planner.py\ncompute expiry checkpoints"]
+    CLI --> Notifier["notifier.py\nvalidate expiry and plan reminder"]
     CLI --> Env["sanitized_env.py\nallowlist child environment"]
     CLI --> AppServer["app_server.py\nread-only stdio RPC adapter"]
     Planner -. informs future spec .-> Ledger["Planning Ledger Spec\ndocs/planning-ledger.md (doc only)"]
     AppServer -. informs future spec .-> Ledger
+    AppServer --> Notifier
     CLI --> Task["task_preview.py\nrender XML preview only"]
     Config --> Draft["Draft root\n%LOCALAPPDATA%/CodexResetCreditDraft"]
     Config -. observe only .-> Legacy["Legacy root\n%LOCALAPPDATA%/CodexResetCredit"]
     Env --> Child["Child process\nisolated CODEX_HOME"]
     AppServer --> Child
+    Notifier --> Daily["Daily read-only task"]
+    Notifier --> Notice["One-shot persistent modal\n(no network request)"]
     Task --> Xml["Inspectable Task Scheduler XML"]
 ```
 
@@ -87,9 +94,10 @@ flowchart TD
 | `config.py` | Resolves draft root, child Codex home, legacy install root, and optional `codex` binary path | Keeps draft state separate from the known legacy install path |
 | `sanitized_env.py` | Builds a child-process environment from a small allowlist | Prevents unrelated tokens and secrets from being inherited by default |
 | `app_server.py` | Executes stdio JSONL handshake and read RPCs (`account/read`, `account/rateLimits/read`) | strictly read-only, masks emails, parses timestamps flexibly, detects environment drift |
+| `notifier.py` | Validates complete inventory, selects the nearest expiry, manages namespaced tasks/state, and displays the modal | No consume path, no raw ID in tasks/state, fail-closed validation |
 | `planner.py` | Computes warmup, validation, and dispatch timestamps from expiry | Pure function; easy to test without network or auth |
 | `task_preview.py` | Renders one-time Scheduled Task XML | Generates inspectable output without touching Task Scheduler |
-| `cli.py` | Exposes `doctor`, `env-preview`, `plan`, `preview-task`, `dry-run`, `observe-rate-limits` | Requires `--allow-live-read` opt-in flag for live observation |
+| `cli.py` | Exposes diagnostic, planning, observation, and notifier commands | Requires `--allow-live-read` for live observation; notifier display performs no live read |
 
 ## Environment scrubbing model
 
@@ -102,6 +110,8 @@ The child environment then adds:
 - `CODEX_HOME=<draft-root>/codex-home`
 - `CODEX_SQLITE_HOME=<draft-root>/codex-home/sqlite`
 - `PYTHONUTF8=1`
+
+The standalone planning and observation commands use that isolated default. The installed notifier instead receives an explicitly validated path to the current signed-in `CODEX_HOME`; the manager never opens or parses its credential files, and Codex app-server remains responsible for normal authentication. SQLite scratch state remains isolated.
 
 This is one of the main reasons the repository exists. The earlier legacy direction needed hardening against accidental secret inheritance, and that class of failure is cheap to prevent if it is designed in from the beginning.
 
@@ -134,15 +144,22 @@ The important boundary is that the repository currently specifies this artifact;
 
 ## Scheduler-preview model
 
-The repository currently renders XML for a one-time Windows task with the following important properties:
+The original `preview-task` command still renders XML without registration:
 
 - `StartWhenAvailable=true`
 - `ExecutionTimeLimit=PT5M`
 - `MultipleInstancesPolicy=IgnoreNew`
-- `WakeToRun=false` in the current preview template
+- `WakeToRun=false`
 - no registration step
 
-The last point is the important one. Preview generation is documentation and inspection, not activation.
+## Installed notifier model
+
+The optional installer creates only:
+
+1. `CodexResetCreditNotifier-DailyCheck`, which performs one read-only observation per day.
+2. `CodexResetCreditNotifier-Notice-<fingerprint>`, which opens the saved local reminder at T−12 without contacting Codex.
+
+The one-shot task uses `InteractiveToken`, `LeastPrivilege`, `StartWhenAvailable`, `WakeToRun`, `IgnoreNew`, an expiry `EndBoundary`, and `ExecutionTimeLimit=PT0S` so the modal is not killed automatically. State and task actions contain a SHA-256 fingerprint rather than the raw credit ID.
 
 ## Threat model
 
@@ -150,31 +167,31 @@ The last point is the important one. Preview generation is documentation and ins
 
 1. secret or token leakage through inherited environment variables
 2. accidental writes into the legacy local installation
-3. hidden scheduler side effects during local testing
-4. documentation drift that makes a read-only repo look like a live reset bot
+3. mutation of unrelated Scheduled Tasks
+4. documentation drift that makes a read-only notifier look like a reset bot
 5. future coupling to undocumented private endpoints
 6. planning-ledger outputs being mistaken for an execution queue
 
-### Risks intentionally deferred
+### Residual timing and platform risks
 
-1. live consume idempotency rules
-2. read-after-consume reconciliation
-3. partial backend failure handling
-4. task wake behavior on sleeping laptops
-5. operator approval and terms gating for any real redemption flow
+1. firmware or Windows power policy can prevent an exact wake
+2. `StartWhenAvailable` catch-up can be delayed
+3. a modal cannot appear while its Windows user is signed out
+4. a once-daily check can first discover a credit after its T−12 target
+5. app-server currently provides one-second rather than fractional-second expiry precision
 
-Those deferred risks are real, but they belong to later milestones and should not leak into the current MVP by implication.
+Live consume idempotency, read-after-consume reconciliation, and operator approval remain deferred because no redemption path exists.
 
 ## Future extension points
 
-If the project continues, the safest next adapter is a read-only one that talks to documented `codex app-server` methods such as `account/rateLimits/read`. Any future live path should remain behind a separate capability boundary, explicit operator intent, and a fresh policy review.
+Any future live path should remain behind a separate capability boundary, explicit operator intent, and a fresh policy review.
 
 That means the likely order is:
 
-1. read-only observability
-2. planning-ledger specification and audit posture alignment
-3. non-mutating preview and dry-run artifacts
-4. only then a decision about whether a user-initiated `consume` path should exist
+1. keep read-only observability and the reminder auditable
+2. improve non-mutating planning and status artifacts
+3. monitor documented app-server contract changes
+4. only then decide whether any user-initiated `consume` path should exist
 
 ## Release gates
 

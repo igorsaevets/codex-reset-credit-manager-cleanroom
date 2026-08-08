@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
-import shlex
 import sys
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import __version__
@@ -15,6 +15,20 @@ from .app_server import (
 )
 from .config import AppConfig, load_config
 from .models import DoctorFinding, DoctorReport
+from .notifier import (
+    DEFAULT_LEAD_HOURS,
+    DEFAULT_TASK_PREFIX,
+    NotifierError,
+    PreviewScheduler,
+    StateStore,
+    WindowsTaskScheduler,
+    display_scheduled_notice,
+    parse_expiry_utc,
+    plan_as_dict,
+    record_notifier_error,
+    sanitized_notifier_status,
+    synchronize_notifier,
+)
 from .planner import build_planning_windows, parse_utc_timestamp
 from .sanitized_env import diff_environment_names
 from .task_preview import render_task_xml
@@ -90,6 +104,23 @@ def _print_json(payload: object) -> int:
     return 0
 
 
+def _add_observation_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--allow-live-read",
+        action="store_true",
+        help="explicit opt-in flag required for the live read-only observation",
+    )
+    parser.add_argument(
+        "--codex-binary",
+        help="override path to codex binary or app-server stub",
+    )
+    parser.add_argument(
+        "--account-codex-home",
+        type=Path,
+        help="existing signed-in Codex home; the manager does not parse its files",
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="codex-reset-credit-manager")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -119,10 +150,68 @@ def _build_parser() -> argparse.ArgumentParser:
     dry_run.add_argument("--expires-at", required=True, help="UTC timestamp, for example 2026-08-02T12:00:00Z")
 
     observe = commands.add_parser("observe-rate-limits", help="query live codex app-server read-only rate limits")
-    observe.add_argument("--allow-live-read", action="store_true", help="explicit opt-in flag required for live read-only observation")
+    _add_observation_arguments(observe)
     observe.add_argument("--json", action="store_true", help="emit machine-readable JSON")
-    observe.add_argument("--codex-binary", help="override path to codex binary or app-server stub")
+
+    notifier_sync = commands.add_parser(
+        "notifier-sync",
+        help="read reset expiries and reconcile one T-12-hour reminder",
+    )
+    _add_observation_arguments(notifier_sync)
+    notifier_sync.add_argument(
+        "--lead-hours",
+        type=int,
+        default=DEFAULT_LEAD_HOURS,
+        help="hours before expiry to display the reminder (default: 12)",
+    )
+    notifier_sync.add_argument(
+        "--language",
+        choices=("en", "ru"),
+        default="en",
+        help="modal reminder language",
+    )
+    notifier_sync.add_argument(
+        "--task-prefix",
+        default=DEFAULT_TASK_PREFIX,
+        help=argparse.SUPPRESS,
+    )
+    notifier_sync.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="perform the read but do not create, replace, or delete tasks",
+    )
+    notifier_sync.add_argument("--json", action="store_true")
+
+    notifier_status = commands.add_parser(
+        "notifier-status",
+        help="show sanitized daily reminder state",
+    )
+    notifier_status.add_argument("--json", action="store_true")
+
+    notifier_show = commands.add_parser(
+        "notifier-show",
+        help=argparse.SUPPRESS,
+    )
+    notifier_show.add_argument("--fingerprint", required=True)
+    notifier_show.add_argument("--expires-at", required=True)
+    notifier_show.add_argument("--language", choices=("en", "ru"), required=True)
+    notifier_show.add_argument("--task-prefix", default=DEFAULT_TASK_PREFIX)
     return parser
+
+
+def _observe(
+    config: AppConfig,
+    codex_binary: str | None,
+    account_codex_home: Path | None,
+):
+    cmd_override = None
+    if codex_binary:
+        cmd_override = parse_codex_binary_command(codex_binary)
+    return observe_app_server_rate_limits(
+        config,
+        command_override=cmd_override,
+        codex_home_override=account_codex_home,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -218,10 +307,7 @@ def main(argv: list[str] | None = None) -> int:
             sys.stderr.write("Error: Live observation requires explicit opt-in. Re-run with --allow-live-read.\n")
             return 1
         try:
-            cmd_override = None
-            if args.codex_binary:
-                cmd_override = parse_codex_binary_command(args.codex_binary)
-            report = observe_app_server_rate_limits(config, command_override=cmd_override)
+            report = _observe(config, args.codex_binary, args.account_codex_home)
         except AppServerObservationError as exc:
             sys.stderr.write(f"Observation failed: {exc}\n")
             return 1
@@ -244,11 +330,96 @@ def main(argv: list[str] | None = None) -> int:
 
         if report.rate_limits.credits:
             print("  Credit Details:")
-            for c in report.rate_limits.credits:
-                print(f"    - ID: {c.id or 'unknown'} | Expires: {c.expires_at or 'unknown'} | Reset: {c.reset_type or 'unknown'} | Status: {c.status or 'unknown'}")
+            for credit in report.rate_limits.credits:
+                print(
+                    f"    - ID: {credit.id or 'unknown'} | "
+                    f"Expires: {credit.expires_at or 'unknown'} | "
+                    f"Reset: {credit.reset_type or 'unknown'} | "
+                    f"Status: {credit.status or 'unknown'}"
+                )
         else:
             print("  Credit Details:      none listed")
         return 0
+
+    if args.command == "notifier-sync":
+        if not args.allow_live_read:
+            sys.stderr.write(
+                "Error: Notifier sync requires explicit read-only opt-in. "
+                "Re-run with --allow-live-read.\n"
+            )
+            return 1
+        try:
+            report = _observe(config, args.codex_binary, args.account_codex_home)
+            scheduler = PreviewScheduler() if args.dry_run else WindowsTaskScheduler()
+            notification_plan = synchronize_notifier(
+                report,
+                store=StateStore(config.root),
+                scheduler=scheduler,
+                now_utc=datetime.now(timezone.utc),
+                lead_hours=args.lead_hours,
+                language=args.language,
+                task_prefix=args.task_prefix,
+                dry_run=args.dry_run,
+            )
+        except (AppServerObservationError, NotifierError) as exc:
+            try:
+                record_notifier_error(
+                    StateStore(config.root),
+                    error_code=type(exc).__name__,
+                    now_utc=datetime.now(timezone.utc),
+                )
+            except NotifierError:
+                pass
+            sys.stderr.write(f"Notifier sync failed: {exc}\n")
+            return 1
+
+        payload = plan_as_dict(notification_plan)
+        if args.json:
+            return _print_json(payload)
+        print(f"Notifier action: {notification_plan.action}")
+        if notification_plan.expires_at_utc:
+            print(f"Expiry UTC:      {notification_plan.expires_at_utc}")
+        if notification_plan.notify_at_utc:
+            print(f"Reminder target: {notification_plan.notify_at_utc}")
+        if notification_plan.scheduled_for_utc:
+            print(f"Task run UTC:    {notification_plan.scheduled_for_utc}")
+        if notification_plan.task_name:
+            print(f"Task name:       {notification_plan.task_name}")
+        return 0
+
+    if args.command == "notifier-status":
+        try:
+            payload = sanitized_notifier_status(StateStore(config.root))
+        except NotifierError as exc:
+            sys.stderr.write(f"Notifier status failed: {exc}\n")
+            return 1
+        if args.json:
+            return _print_json(payload)
+        print(f"Last check:       {payload['lastCheckAtUtc'] or 'never'}")
+        print(f"Last result:      {payload['lastCheckResult'] or 'none'}")
+        scheduled = payload.get("scheduled")
+        if isinstance(scheduled, dict):
+            print(f"Scheduled expiry: {scheduled['expiresAtUtc']}")
+            print(f"Reminder time:    {scheduled['scheduledForUtc']}")
+            print(f"Task name:        {scheduled['taskName']}")
+        else:
+            print("Scheduled notice: none")
+        return 0
+
+    if args.command == "notifier-show":
+        try:
+            result = display_scheduled_notice(
+                store=StateStore(config.root),
+                fingerprint=args.fingerprint,
+                expires_at_utc=parse_expiry_utc(args.expires_at),
+                language=args.language,
+                task_prefix=args.task_prefix,
+                now_utc=datetime.now(timezone.utc),
+            )
+        except NotifierError as exc:
+            sys.stderr.write(f"Notifier display failed: {exc}\n")
+            return 1
+        return 0 if result in {"notified", "stale", "already_notified", "expired"} else 1
 
     parser.error(f"unknown command: {args.command}")
     return 2

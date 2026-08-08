@@ -1,123 +1,211 @@
-# Codex Reset Credit Manager
+# Codex Reset Credit Expiry Notifier
 
-Windows-first, safety-first planning and isolation toolkit for Codex reset-credit workflows.
+Read-only Windows reminder for OpenAI Codex usage-limit reset expiry. It checks the local Codex app-server once per day, reads the nearest available reset credit's `expiresAt`, and schedules one persistent modal reminder for 12 hours before that activation disappears.
 
-This repository is a public read-only MVP. It does not consume a reset credit, does not register a Scheduled Task, does not call private backend endpoints, and does not modify the paused third-party installation already present on the author's laptop.
+> **Short answer:** this tool tells you the exact local date and time when the nearest saved Codex usage-limit reset expires. It does not activate, redeem, consume, create, or extend a reset.
 
-## Status
+Version **0.2.1** adds a localized remaining-time line and automatic Russian/English language selection while preserving the project's read-only boundary.
 
-- Project status: public preview
-- Milestone: read-only MVP
-- Current focus: Phase 1.5 planning ledger and posture alignment
-- Existing laptop installation: intentionally untouched
-- Live `consume` support: not implemented
-- Scheduler registration: not implemented
+## What it does
 
-## Why this repository exists
+- queries `codex app-server --stdio` through read-only RPCs only
+- reads `account/read` and `account/rateLimits/read`
+- verifies that the detailed available-credit inventory is complete
+- selects the earliest available Codex rate-limit reset (`codexRateLimits`, including its snake-case wire equivalent)
+- converts its timezone-aware `expiresAt` to the PC's local date, time, timezone, and UTC offset
+- runs one network check per day with Windows Task Scheduler
+- schedules one local, one-shot reminder at **T−12 hours**
+- displays days, hours, minutes, and seconds remaining when the window opens
+- keeps the top-most modal visible until **OK** or the window's close button is selected
+- stores only a SHA-256 fingerprint, timestamps, task name, and sanitized status
 
-This repository exists to solve the parts that are easy to get wrong before any live reset behavior is even considered:
+The daily controller and the one-shot reminder have different jobs:
 
-- filesystem isolation from a legacy local install
-- strict child-process environment scrubbing
-- deterministic expiry planning
-- inspectable Windows Task Scheduler XML preview instead of silent task registration
-- explicit provenance documentation for public use
+1. `CodexResetCreditNotifier-DailyCheck` performs the single daily read.
+2. `CodexResetCreditNotifier-Notice-<hash>` performs no network request. It only opens the already-planned modal at T−12 hours.
 
-It also deliberately avoids the path taken by many public experiments: calling private reset-credit endpoints directly or reading local auth state in ad hoc ways. The long-term intent, if the project ever grows beyond this MVP, is to stay on documented Codex surfaces such as [`codex app-server`](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md).
+This split is how one daily check can still produce an exact 12-hour reminder.
 
-## What the MVP already does
+## What it never does
 
-- builds an isolated root under `%LOCALAPPDATA%\CodexResetCreditDraft`
-- forces a separate `CODEX_HOME` and `CODEX_SQLITE_HOME` for child processes
-- keeps only a small allowlist of ambient environment variables and only reads values for allowlisted variables
-- observes non-allowlisted environment variables by name only without reading their values into memory
-- provides Phase 1 read-only app-server observability (`observe-rate-limits`) using documented surfaces (`initialize`, `initialized`, `account/read`, `account/rateLimits/read`) behind an explicit `--allow-live-read` opt-in flag
-- includes Phase 1.5 planning-ledger documentation for future auditable dry-run artifacts
-- computes warmup, validation, and dispatch checkpoints from an expiry timestamp
-- renders one-time Scheduled Task XML for inspection only
-- ships unit tests for environment scrubbing, secret non-materialization, planning windows, app-server read-only adapter, and XML preview generation
+- no reset activation or automatic redemption
+- no `account/rateLimitResetCredit/consume` call
+- no direct `/backend-api/wham/*` HTTP request
+- the manager never directly opens or parses `auth.json`; authentication remains inside the user's normal Codex app-server session
+- no API-key, access-token, email-address, raw credit-ID, or idempotency-key logging
+- no modification of another Codex reset manager installation
+- no quota bypass, additional usage, or extension of an existing expiry
 
-## What this MVP does not do
+If the inventory is incomplete, the account environment changes, a timestamp is invalid, or an available-count invariant fails, the notifier stops without scheduling a dialog.
 
-- no live `account/rateLimitResetCredit/consume` path
-- no automatic credit redemption
-- no Scheduled Task registration
-- no direct private backend HTTP calls (such as `/backend-api/wham/*`)
-- no auth-file scraping helper
-- no transmission of API key or token values anywhere
-- no logging or forwarding of unrelated secret values into child processes
-- no background execution engine for planning ledgers or dry-run artifacts
-- no writes into the existing `%LOCALAPPDATA%\CodexResetCredit` install
+## Install on Windows
 
-For a complete guide to repository organization, codebase orientation, and legacy differences, see [docs/repository-guide.md](docs/repository-guide.md).
+Requirements:
 
-## Why this repository is different
+- Windows 10 or Windows 11
+- CPython 3.11 or later with `pythonw.exe` and Tkinter
+- a signed-in Codex CLI available on `PATH`
+- PowerShell with the Windows ScheduledTasks module
 
-This is not positioned as a “quota bypass” tool or a full auto-reset manager. Right now it is a hardening and planning foundation.
+Preview the installation without changing the PC:
 
-| Area | Typical public reset helper direction | This repository |
-| --- | --- | --- |
-| Scope | End-to-end reset flow | Read-only planning and isolation only |
-| Child environment | Often inherits ambient shell state | Small allowlist; non-allowlisted secret values are never read or forwarded |
-| Scheduler behavior | Real registration or background automation | XML preview only |
-| Existing local install | May reuse or mutate it | Explicitly treated as external and untouched |
-| Backend surface | Private endpoints are common | Documented `codex app-server --stdio` read-only RPCs only |
-| Publication posture | Public-first | Public read-only MVP with an explicit provenance caveat |
+```powershell
+pwsh -NoProfile -File .\install-notifier.ps1 `
+  -Language auto `
+  -LeadHours 12 `
+  -DailyAt 09:00 `
+  -WhatIf
+```
 
-More detail: [docs/repository-guide.md](docs/repository-guide.md), [docs/upstream-differences.md](docs/upstream-differences.md), [docs/provenance.md](docs/provenance.md)
+Install and activate the daily read-only check:
 
-## Repository map
+```powershell
+pwsh -NoProfile -File .\install-notifier.ps1 `
+  -Language auto `
+  -LeadHours 12 `
+  -DailyAt 09:00 `
+  -Confirm:$false
+```
 
-- [docs/repository-guide.md](docs/repository-guide.md) — complete user-facing orientation and repository guide
-- [docs/architecture.md](docs/architecture.md) — current design, trust boundaries, and threat model
-- [docs/roadmap.md](docs/roadmap.md) — phased plan from read-only MVP to any future gated capabilities
-- [docs/planning-ledger.md](docs/planning-ledger.md) — Phase 1.5 planning-ledger specification for future audit artifacts
-- [docs/provenance.md](docs/provenance.md) — publication and derivative-risk caveats
-- [docs/upstream-differences.md](docs/upstream-differences.md) — intentional differences from the previously studied legacy direction
-- [docs/strategic-review-2026-07-26.md](docs/strategic-review-2026-07-26.md) — prior strategic review snapshot
-- `src/codex_reset_credit_manager/` — CLI and core helpers
-- `tests/` — unit tests
+For a Russian modal:
 
-## Quick start
+```powershell
+pwsh -NoProfile -File .\install-notifier.ps1 `
+  -Language ru `
+  -LeadHours 12 `
+  -DailyAt 09:00 `
+  -Confirm:$false
+```
+
+The installer performs one initial read-only check, then runs once per day. Pass `-SkipInitialCheck` if the first check should wait until the daily trigger.
+
+`-Language auto` is the default. It selects Russian for a Windows UI culture beginning with `ru` and English for the United States and every other currently unsupported language. Use `-Language ru` or `-Language en` to override it. The resolved language is stored during installation; reinstall after changing the Windows display language.
+
+## Inspect without installing
+
+Install the package in editable mode:
 
 ```powershell
 python -m pip install -e .[dev]
-python -m codex_reset_credit_manager doctor
-python -m codex_reset_credit_manager env-preview
-python -m codex_reset_credit_manager observe-rate-limits --allow-live-read
-python -m codex_reset_credit_manager plan --expires-at 2026-08-02T12:00:00Z
-python -m codex_reset_credit_manager preview-task `
-  --run-at 2026-08-02T11:58:40Z `
-  --exec-command "python" `
-  --arguments "-m codex_reset_credit_manager dry-run --expires-at 2026-08-02T12:00:00Z"
-python -m unittest discover -s tests -v
 ```
 
-## Safety and compliance notes
+Read current rate limits without scheduling anything:
 
-- This repository does not promise unlimited Codex usage and must not be described as a rate-limit bypass.
-- Any future live mutation path would need to use documented app-server methods such as `account/rateLimits/read` and `account/rateLimitResetCredit/consume`, with explicit user intent and idempotent behavior.
-- OpenAI's Terms of Use prohibit users from circumventing rate limits, restrictions, or protective measures. That boundary is one of the release gates for any future live feature.
-- Historical ecosystem pressure around reset-credit tooling is real: for example, issue [#29618](https://github.com/openai/codex/issues/29618) asked for detailed reset-credit rows through supported Codex surfaces so local tools would not need private endpoints.
+```powershell
+python -m codex_reset_credit_manager observe-rate-limits `
+  --allow-live-read `
+  --json
+```
 
-## Provenance note
+Preview what the notifier would schedule:
 
-This repository is best described as an independently written public preview, not as a formally isolated legal clean-room deliverable. Earlier evaluation work included reading an unlicensed third-party repository, so this project keeps an explicit provenance caveat instead of claiming strict clean-room certification.
+```powershell
+python -m codex_reset_credit_manager notifier-sync `
+  --allow-live-read `
+  --lead-hours 12 `
+  --language en `
+  --dry-run `
+  --json
+```
 
-See [docs/provenance.md](docs/provenance.md) for the exact caveat and release options.
+Inspect sanitized notifier state:
 
-## Roadmap
+```powershell
+python -m codex_reset_credit_manager notifier-status --json
+```
 
-The short version:
+## Timing behavior and edge cases
 
-1. Phase 0: establish isolation, deterministic planning, and XML preview without live side effects
-2. Phase 1: add optional read-only observability through supported app-server interfaces
-3. Phase 1.5: freeze the operator planning-ledger format and align public repository posture
-4. Phase 2: add non-mutating dry-run and preview artifacts that follow the Phase 1.5 ledger model
-5. only then decide whether a user-initiated consume path or scheduler registration should exist at all
+- **Normal case:** when the daily check sees a reset more than 12 hours before expiry, the local one-shot runs exactly at `expiresAt − 12 hours`.
+- **Late discovery:** if a reset is first discovered inside the 12-hour window, the reminder is scheduled immediately after a short controller-exit grace period. Software cannot retroactively notify at T−12.
+- **PC asleep:** the one-shot has `WakeToRun` and `StartWhenAvailable`. Firmware, battery policy, or disabled wake timers can prevent an exact wake, and Microsoft documents a default 10-minute queue delay for a late `StartWhenAvailable` run.
+- **User signed out:** the modal requires the same interactive Windows user. It is not shown on the secure desktop or to another account.
+- **Dialog left open:** its task has no execution time limit; the dialog remains until OK or close is selected.
+- **Remaining time:** the modal shows days, hours, minutes, and seconds remaining at the instant it opens. It is an accurate snapshot, not a live ticking counter.
+- **Timestamp precision:** the notifier displays the one-second precision exposed by `account/rateLimits/read`; it does not scrape a private backend for fractional seconds.
+- **Expired before display:** the child checks the saved UTC expiry locally and exits without showing stale information.
+- **Duplicate daily runs:** a lock, deterministic fingerprint, and deterministic task name prevent duplicate reminders for the same credit.
+- **Credit changes:** the next daily check replaces only the notifier's own stale one-shot task.
 
-Full plan: [docs/roadmap.md](docs/roadmap.md)
+## Safety model
 
-## Non-affiliation
+The notifier passes the validated path of the current signed-in `CODEX_HOME` to the official app-server, without parsing its credential files, and uses a sanitized child-process environment. It requires:
 
-This project is an independent open-source project and is not affiliated with OpenAI or GitHub.
+- explicit `--allow-live-read`
+- `mode == "read-only"`
+- `live_consume_allowed == false`
+- an exact match between available count and available detail rows
+- status `available`
+- the app-server Codex rate-limit reset type, normalized across camel-case and snake-case forms
+- an opaque ID used only as input to a local SHA-256 fingerprint
+- a timezone-aware future `expiresAt`
+
+The one-shot action contains the fingerprint and expiry, not the raw credit ID. Its Task Scheduler XML uses `InteractiveToken`, `LeastPrivilege`, `StartWhenAvailable`, `WakeToRun`, `IgnoreNew`, and no execution-time limit for the modal.
+
+## Frequently asked questions
+
+### When does a Codex reset credit disappear?
+
+The authoritative time for an individual available reset is its server-provided `expiresAt`. The notifier displays that instant in both local time and UTC.
+
+### Does this program automatically reset my Codex limit?
+
+No. It is an expiry monitor and reminder only. There is no redemption implementation in the Python source or scheduled-task actions.
+
+### Why not poll every few minutes?
+
+The controller intentionally checks once per day to minimize background activity. It turns the observed expiry into one local T−12 Task Scheduler trigger, so frequent network polling is unnecessary.
+
+### Will the notification disappear by itself?
+
+No. The Windows dialog is modal and stays open until you select OK or close the window.
+
+### Which language will the notification use?
+
+The installer defaults to `auto`: Russian Windows UI uses Russian; American English and all other currently unsupported UI languages use English. Explicit `-Language ru` and `-Language en` settings always win. The project currently ships two translations, not arbitrary machine translation.
+
+### Is this an official OpenAI tool?
+
+No. This is an independent open-source project and is not affiliated with or endorsed by OpenAI or GitHub.
+
+## Other read-only tools in this repository
+
+- `doctor` checks isolation and local prerequisites
+- `env-preview` shows which environment-variable names are kept or stripped
+- `observe-rate-limits` performs an explicitly authorized read-only observation
+- `plan` computes deterministic planning checkpoints from a supplied expiry
+- `preview-task` renders Task Scheduler XML without registering it
+- `dry-run` prints the earlier planning-only workflow
+
+## Development and verification
+
+The test suite uses fake app-server fixtures and fake schedulers. It never contacts a real account and never opens a real modal.
+
+```powershell
+$env:PYTHONPATH = (Join-Path $PWD 'src')
+python -m unittest discover -s tests -v
+git diff --check
+```
+
+Tests cover exact 12-hour arithmetic, localized remaining-time rendering, nearest-credit selection, incomplete inventory, late discovery, idempotent scheduling, stale-task replacement, expired notices, modal deduplication, state redaction, Task Scheduler XML, CLI opt-in, and a source-level absence check for reset-redemption RPCs.
+
+## Repository map
+
+- [docs/windows-expiry-notifier.md](docs/windows-expiry-notifier.md) — notifier architecture, installation, recovery, and threat model
+- [docs/repository-guide.md](docs/repository-guide.md) — codebase orientation
+- [docs/architecture.md](docs/architecture.md) — original isolation and planning design
+- [docs/planning-ledger.md](docs/planning-ledger.md) — planning-ledger specification
+- [docs/provenance.md](docs/provenance.md) — publication and derivative-risk caveats
+- [docs/upstream-differences.md](docs/upstream-differences.md) — differences from previously studied tools
+- `src/codex_reset_credit_manager/` — CLI, read-only app-server transport, and notifier
+- `tests/` — fake-only unit and contract tests
+
+## Provenance and responsible use
+
+This repository is independently written but does not claim formal legal clean-room certification. Earlier evaluation work included reading an unlicensed third-party repository; the read-only notifier code and its tests are new work in this repository. See [docs/provenance.md](docs/provenance.md).
+
+This software must not be described or used as a rate-limit bypass. It does not promise unlimited Codex usage and cannot change an OpenAI plan, quota, or server-side expiry.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

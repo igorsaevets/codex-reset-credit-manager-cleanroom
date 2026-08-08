@@ -4,12 +4,30 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codex-reset-credit-manager"
-version = "0.1.0"
-description = "Public read-only MVP of a Windows-first Codex reset credit manager."
+version = "0.2.1"
+description = "Read-only Windows notifier for OpenAI Codex usage-limit reset expiry, with daily checks and a persistent 12-hour reminder."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Igor Saevets" }]
+keywords = [
+    "codex",
+    "openai-codex",
+    "usage-limit-reset",
+    "reset-credit",
+    "expiresat",
+    "windows-task-scheduler",
+    "expiry-notification",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Win32 (MS Windows)",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: System :: Monitoring",
+]
 dependencies = []
 
 [project.optional-dependencies]
@@ -17,6 +35,11 @@ dev = ["pytest>=8.2"]
 
 [project.scripts]
 codex-reset-credit-manager = "codex_reset_credit_manager.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/igorsaevets/codex-reset-credit-manager-cleanroom"
+Repository = "https://github.com/igorsaevets/codex-reset-credit-manager-cleanroom"
+Issues = "https://github.com/igorsaevets/codex-reset-credit-manager-cleanroom/issues"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

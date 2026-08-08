@@ -4,6 +4,18 @@
 
 This roadmap is intentionally conservative. Each phase must earn the right to exist. The repository should not jump from a read-only planning draft to a live auto-reset tool just because that is the emotionally attractive destination.
 
+## Current release — 0.2.0 read-only expiry notifier
+
+Status: completed
+
+Version 0.2.0 adds an optional, reversible Windows reminder layer:
+
+- one read-only `account/rateLimits/read` observation per day
+- one local one-shot dialog at `expiresAt − 12 hours`
+- no reset redemption, private backend request, or quota mutation
+- task registration restricted to the `CodexResetCreditNotifier-*` namespace
+- persistent modal display until OK or close
+
 ## Phase 0 — Hardening foundation
 
 Status: completed
@@ -56,7 +68,7 @@ Add optional, documented-surface read-only visibility through `codex app-server`
 
 ## Phase 1.5 — Operator planning ledger and posture alignment
 
-Status: current
+Status: completed
 
 ### Objective
 
@@ -111,6 +123,8 @@ Move from static timestamp planning to richer, reproducible, non-mutating artifa
 - no dependence on auth scraping or private endpoints
 - documentation explains exactly what remains hypothetical
 
+The v0.2 notifier is deliberately separate from this proposed planning-ledger generator. It reads the current account inventory directly and never treats a planning ledger as an execution queue.
+
 ## Phase 3 — Decision gate for any live action
 
 Status: not approved
@@ -140,13 +154,13 @@ Only then should the team design a live path with:
 - read-after-action reconciliation
 - tests that do not consume real credits
 
-## Phase 4 — Optional scheduler activation
+## Phase 4 — Optional scheduled reset action
 
-Status: deferred
+Status: not approved
 
 ### Objective
 
-Consider whether task registration or last-chance execution should exist as an explicit, separate capability.
+Consider whether scheduled redemption or last-chance reset execution should exist as an explicit capability separate from the read-only notifier.
 
 ### Guardrails
 
@@ -157,7 +171,7 @@ Consider whether task registration or last-chance execution should exist as an e
 
 ### Why this is late
 
-Scheduler activation multiplies the blast radius. It interacts with sleep/wake timing, battery state, missed windows, and user expectations. That work should not happen before the read-only and operator-controlled layers are solid.
+Scheduling a mutating account action multiplies the blast radius. It interacts with sleep/wake timing, battery state, missed windows, idempotency, and user expectations. A local read-only reminder does not imply approval for that capability.
 
 ## Release gates that apply to every future phase
 
@@ -171,9 +185,9 @@ Scheduler activation multiplies the blast radius. It interacts with sleep/wake t
 
 The repository is strongest when described as:
 
-- a public preview
+- a public read-only expiry notifier
 - a fresh reimplementation
-- a Windows-first planning and isolation toolkit
+- a Windows-first observability, reminder, planning, and isolation toolkit
 - a repository that earns future capability step by step
 
 It is weakest when described as:

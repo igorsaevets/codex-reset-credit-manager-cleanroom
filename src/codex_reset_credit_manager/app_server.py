@@ -308,6 +308,7 @@ def observe_app_server_rate_limits(
     config: AppConfig,
     *,
     command_override: list[str] | None = None,
+    codex_home_override: Path | None = None,
     timeout: float = 10.0,
 ) -> ObservationReport:
     if command_override:
@@ -317,7 +318,23 @@ def observe_app_server_rate_limits(
     else:
         cmd = ["codex", "app-server", "--stdio"]
 
-    child_env = build_child_environment(isolated_codex_home=config.child_codex_home)
+    if codex_home_override is not None:
+        expected_codex_home = codex_home_override.expanduser().resolve()
+        if not expected_codex_home.is_dir():
+            raise AppServerObservationError(
+                "The selected signed-in Codex home does not exist."
+            )
+    else:
+        expected_codex_home = config.child_codex_home
+        try:
+            expected_codex_home.mkdir(parents=True, exist_ok=True)
+            (expected_codex_home / "sqlite").mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise AppServerObservationError(
+                "The isolated Codex home could not be created."
+            ) from exc
+
+    child_env = build_child_environment(isolated_codex_home=expected_codex_home)
     transport = AppServerTransport(cmd, child_env, timeout=timeout)
 
     try:
@@ -349,7 +366,7 @@ def observe_app_server_rate_limits(
 
     # Process initialize response
     reported_codex_home = init_res.get("codexHome")
-    matches_home = compare_codex_home(reported_codex_home, config.child_codex_home)
+    matches_home = compare_codex_home(reported_codex_home, expected_codex_home)
     handshake = AppServerHandshakeInfo(
         user_agent=init_res.get("userAgent"),
         codex_home=reported_codex_home,
