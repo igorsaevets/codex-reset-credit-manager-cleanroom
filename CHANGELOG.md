@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2 - 2026-08-16
+
+- add monthly GitHub repository update checker with 30-day throttle and automatic prompt
+- add `check-updates` CLI subcommand with `--force`, `--repo`, and `--json` flags
+- add custom ChatGPT-inspired cyclic reset app icon across Window, Taskbar, and Start Menu shortcuts
+- add non-blocking in-app update notification banner and direct GitHub release launcher
+- update documentation with high-resolution logo and release badges
+
 ## 0.3.1 - 2026-08-16
 
 - add real-time Usage % and window duration display in desktop GUI status cards

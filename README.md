@@ -1,10 +1,24 @@
-# Codex Reset Credit Expiry Notifier
+<p align="center">
+  <img src="assets/app_icon.png" width="128" height="128" alt="Codex Reset Credit Manager Icon" />
+</p>
 
-Read-only Windows reminder for OpenAI Codex usage-limit reset expiry. It checks the local Codex app-server once per day, reads the nearest available reset credit's `expiresAt`, and schedules one persistent modal reminder for 12 hours before that activation disappears.
+<h1 align="center">Codex Reset Credit Manager & Live Usage Monitor</h1>
 
-> **Short answer:** this tool tells you the exact local date and time when the nearest saved Codex usage-limit reset expires. It does not activate, redeem, consume, create, or extend a reset.
+<p align="center">
+  <b>Read-only Windows monitor and notifier for OpenAI Codex rate-limit usage, reset credits, and expiry reminders.</b>
+</p>
 
-Version **0.2.1** adds a localized remaining-time line and automatic Russian/English language selection while preserving the project's read-only boundary.
+---
+
+Read-only Windows monitor and notifier for OpenAI Codex usage-limit reset expiry and real-time rate limit tracking. It queries the local Codex app-server, inspects live primary and secondary quota usage (`usedPercent`, `windowDurationMins`, `resetsAt`), reads available reset credits, and schedules one persistent modal reminder for 12 hours before a reset expires.
+
+> **Short answer:** this tool shows you live Codex rate-limit usage and tells you the exact local date and time when the nearest saved Codex usage-limit reset expires. It does not activate, redeem, consume, create, or extend a reset.
+
+Version **0.3.2** introduces:
+- **ChatGPT-Inspired App Icon**: Custom cyan/emerald cyclic vortex icon across Desktop, Start Menu, Window headers, and Taskbar.
+- **Monthly Repository Update Checker**: Automatic background check (throttled to 1/month) with in-app banner to easily update.
+- **Interactive Desktop GUI Monitor**: Live usage gauges, real-time quota inspection, and Russian/English toggle.
+- **`usage` CLI Command**: ASCII progress bars and countdowns directly in terminal.
 
 ## What it does
 

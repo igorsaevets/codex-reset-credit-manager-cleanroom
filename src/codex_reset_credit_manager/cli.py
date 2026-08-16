@@ -225,6 +225,22 @@ def _build_parser() -> argparse.ArgumentParser:
     notifier_show.add_argument("--expires-at", required=True)
     notifier_show.add_argument("--language", choices=("en", "ru"), required=True)
     notifier_show.add_argument("--task-prefix", default=DEFAULT_TASK_PREFIX)
+
+    check_updates = commands.add_parser(
+        "check-updates",
+        help="check if a newer version is available on GitHub (throttled to 1/month unless --force)",
+    )
+    check_updates.add_argument(
+        "--force",
+        action="store_true",
+        help="bypass 30-day throttle and query GitHub API immediately",
+    )
+    check_updates.add_argument(
+        "--repo",
+        default="igorsaevets/codex-reset-credit-manager-cleanroom",
+        help="GitHub repository to query",
+    )
+    check_updates.add_argument("--json", action="store_true")
     return parser
 
 
@@ -529,6 +545,36 @@ def main(argv: list[str] | None = None) -> int:
             sys.stderr.write(f"Notifier display failed: {exc}\n")
             return 1
         return 0 if result in {"notified", "stale", "already_notified", "expired"} else 1
+
+    if args.command == "check-updates":
+        from .updater import check_for_updates
+
+        store = StateStore(config.root)
+        res = check_for_updates(
+            store=store,
+            current_version=__version__,
+            repo=args.repo,
+            force=args.force,
+        )
+        if args.json:
+            return _print_json(asdict(res))
+        if res.error:
+            sys.stderr.write(f"Update check error: {res.error}\n")
+            return 0
+        if res.is_update_available:
+            print(f"Update available: v{res.latest_version} (Current: v{res.current_version})")
+            print(f"Download / Changelog: {res.release_url}")
+            if res.release_notes:
+                print(f"\nNotes:\n{res.release_notes[:300]}...")
+        else:
+            if res.skipped_due_to_throttle:
+                print(
+                    f"Already up to date (checked on {res.checked_at_utc[:10]}). "
+                    f"Current: v{res.current_version}. Use --force to check GitHub again."
+                )
+            else:
+                print(f"You are on the latest version: v{res.current_version} (GitHub: v{res.latest_version}).")
+        return 0
 
     parser.error(f"unknown command: {args.command}")
     return 2

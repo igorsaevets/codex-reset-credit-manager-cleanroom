@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import webbrowser
 from contextlib import AbstractContextManager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
@@ -172,6 +173,8 @@ def _default_state() -> dict[str, Any]:
         "lastNotified": None,
         "lastError": None,
         "lastUsage": None,
+        "lastUpdateCheckAtUtc": None,
+        "lastKnownLatestVersion": None,
     }
 
 
@@ -188,7 +191,7 @@ def _validate_state(value: Mapping[str, Any]) -> None:
         "lastNotified",
         "lastError",
     }
-    allowed_keys = base_required | {"lastUsage"}
+    allowed_keys = base_required | {"lastUsage", "lastUpdateCheckAtUtc", "lastKnownLatestVersion"}
     if not base_required.issubset(set(value)) or not set(value).issubset(allowed_keys):
         raise NotifierError("Notifier state has an unexpected shape.")
 
@@ -247,6 +250,14 @@ def _validate_state(value: Mapping[str, Any]) -> None:
     last_usage = value.get("lastUsage")
     if last_usage is not None and not isinstance(last_usage, dict):
         raise NotifierError("Notifier lastUsage state must be an object or null.")
+
+    last_update_check = value.get("lastUpdateCheckAtUtc")
+    if last_update_check is not None and not isinstance(last_update_check, str):
+        raise NotifierError("Notifier lastUpdateCheckAtUtc must be an ISO string or null.")
+
+    last_known_ver = value.get("lastKnownLatestVersion")
+    if last_known_ver is not None and not isinstance(last_known_ver, str):
+        raise NotifierError("Notifier lastKnownLatestVersion must be a string or null.")
 
 
 def format_usage_bar(used_percent: float | None, width: int = 20) -> str:
@@ -1209,6 +1220,13 @@ def show_status_gui(
     main_frame = ttk.Frame(root, style="Main.TFrame", padding=(20, 16, 20, 16))
     main_frame.pack(fill="both", expand=True)
 
+    # Update Notification Banner (Hidden by default)
+    banner_update = ttk.Frame(main_frame, style="Card.TFrame", padding=10)
+    lbl_update_text = ttk.Label(banner_update, text="", style="CardValueGreen.TLabel")
+    lbl_update_text.pack(side="left", fill="x", expand=True)
+    btn_open_release = ttk.Button(banner_update, text="Обновить", style="Action.TButton")
+    btn_open_release.pack(side="right", padx=(10, 0))
+
     # Title Bar
     title_label = ttk.Label(main_frame, text="", style="Title.TLabel")
     title_label.pack(anchor="w")
@@ -1277,8 +1295,11 @@ def show_status_gui(
     btn_refresh = ttk.Button(btn_frame, text="", style="Action.TButton")
     btn_refresh.pack(side="left")
 
+    btn_check_update = ttk.Button(btn_frame, text="", style="Action.TButton")
+    btn_check_update.pack(side="left", padx=8)
+
     btn_lang = ttk.Button(btn_frame, text="", style="Action.TButton")
-    btn_lang.pack(side="left", padx=10)
+    btn_lang.pack(side="left")
 
     btn_close = ttk.Button(btn_frame, text="", style="Action.TButton", command=root.destroy)
     btn_close.pack(side="right")
@@ -1297,8 +1318,10 @@ def show_status_gui(
         lbl_credits_title.config(text="ДОСТУПНЫЕ СБРОСЫ ЛИМИТОВ (RESET CREDITS)" if is_r else "RESET CREDITS INVENTORY")
         lbl_notifier_title.config(text="СЛУЖБА НАПОМИНАНИЙ (NOTIFIER)" if is_r else "DAILY NOTIFIER STATUS")
         btn_refresh.config(text="Обновить сейчас" if is_r else "Check Now")
+        btn_check_update.config(text="Обновления" if is_r else "Check Updates")
         btn_lang.config(text="English" if is_r else "Русский")
         btn_close.config(text="Закрыть" if is_r else "Close")
+        btn_open_release.config(text="Обновить / GitHub" if is_r else "Update / GitHub")
 
     def toggle_lang() -> None:
         nonlocal current_lang
@@ -1400,6 +1423,19 @@ def show_status_gui(
         except Exception as exc:
             events.put(("error", str(exc)))
 
+    def update_checker_worker(force: bool) -> None:
+        try:
+            from .updater import check_for_updates
+
+            res = check_for_updates(
+                store=store,
+                current_version=__version__,
+                force=force,
+            )
+            events.put(("update_check", (res, force)))
+        except Exception:
+            pass
+
     def trigger_refresh() -> None:
         nonlocal is_busy
         if is_busy:
@@ -1409,25 +1445,50 @@ def show_status_gui(
         status_bar.config(text="Запрос данных от Codex app-server..." if current_lang == "ru" else "Querying Codex app-server...")
         threading.Thread(target=fetch_worker, daemon=True).start()
 
+    def trigger_update_check() -> None:
+        status_bar.config(text="Проверка обновлений на GitHub..." if current_lang == "ru" else "Checking for updates on GitHub...")
+        threading.Thread(target=update_checker_worker, args=(True,), daemon=True).start()
+
     btn_refresh.config(command=trigger_refresh)
+    btn_check_update.config(command=trigger_update_check)
 
     def process_queue() -> None:
         nonlocal is_busy
         try:
             while True:
                 kind, data = events.get_nowait()
-                is_busy = False
-                btn_refresh.config(state="normal")
                 if kind == "success":
+                    is_busy = False
+                    btn_refresh.config(state="normal")
                     render_report(data, current_lang)
-                else:
+                elif kind == "error":
+                    is_busy = False
+                    btn_refresh.config(state="normal")
                     status_bar.config(text=f"{'Ошибка обновления' if current_lang == 'ru' else 'Update error'}: {data}")
+                elif kind == "update_check":
+                    res, forced = data
+                    if res.is_update_available:
+                        banner_update.pack(fill="x", pady=(0, 10), before=title_label)
+                        is_r = current_lang == "ru"
+                        lbl_update_text.config(
+                            text=f"🎉 Доступно обновление v{res.latest_version}! (Текущая: v{__version__})"
+                            if is_r
+                            else f"🎉 New update v{res.latest_version} is available! (Current: v{__version__})"
+                        )
+                        btn_open_release.config(command=lambda u=res.release_url: webbrowser.open(u))
+                    elif forced:
+                        is_r = current_lang == "ru"
+                        status_bar.config(
+                            text=f"У вас последняя версия (v{__version__})" if is_r else f"You have the latest version (v{__version__})"
+                        )
         except queue.Empty:
             pass
         root.after(100, process_queue)
 
     update_texts(current_lang)
     trigger_refresh()
+    # Run automatic monthly update check in background
+    threading.Thread(target=update_checker_worker, args=(False,), daemon=True).start()
     root.after(100, process_queue)
     root.mainloop()
 
