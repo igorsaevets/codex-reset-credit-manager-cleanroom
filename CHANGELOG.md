@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 - 2026-08-16
+
+- add real-time Usage % and window duration display in desktop GUI status cards
+- add explicit version display across window title, header, and subtitle in both Russian and English
+- improve resilient refresh and error presentation in GUI status monitor
+- update packaging metadata and full test suite
+
 ## 0.3.0 - 2026-08-16
 
 - add live rate-limit usage and quota inspection from `codex app-server` (`primary` and `secondary` windows, `usedPercent`, `resetsAt`, window duration, account credits, and spend control)
