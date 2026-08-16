@@ -89,7 +89,26 @@ Install the package in editable mode:
 python -m pip install -e .[dev]
 ```
 
-Read current rate limits without scheduling anything:
+Display current rate-limit usage, progress bar, and reset countdown:
+
+```powershell
+# In Russian
+python -m codex_reset_credit_manager usage --allow-live-read --language ru
+
+# In English
+python -m codex_reset_credit_manager usage --allow-live-read --language en
+
+# In JSON
+python -m codex_reset_credit_manager usage --allow-live-read --json
+```
+
+Launch the interactive desktop status monitor:
+
+```powershell
+python -m codex_reset_credit_manager gui --allow-live-read
+```
+
+Read full observation report (account, rate-limits, reset-credits inventory):
 
 ```powershell
 python -m codex_reset_credit_manager observe-rate-limits `

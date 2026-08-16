@@ -11,12 +11,18 @@ from codex_reset_credit_manager.models import (
     CreditDetail,
     ObservationReport,
     RateLimitInfo,
+    RateLimitUsage,
+    UsageWindowInfo,
 )
 from codex_reset_credit_manager.notifier import (
     NOTICE_START_GRACE_SECONDS,
     NotifierError,
     StateStore,
     display_scheduled_notice,
+    format_rate_limit_usage_report,
+    format_usage_bar,
+    format_usage_time_remaining,
+    format_window_duration,
     notice_copy,
     notice_task_name,
     parse_expiry_utc,
@@ -434,6 +440,115 @@ class NotifierControllerTests(unittest.TestCase):
         self.assertNotIn("fingerprint", status["scheduled"])
         self.assertNotIn(plan.fingerprint, str(status))
 
+    def test_synchronize_notifier_records_last_usage(self) -> None:
+        obs = observation([credit("opaque", self.expiry)])
+        obs_with_usage = ObservationReport(
+            mode=obs.mode,
+            live_read_allowed=obs.live_read_allowed,
+            timestamp_utc=obs.timestamp_utc,
+            handshake=obs.handshake,
+            account=obs.account,
+            rate_limits=RateLimitInfo(
+                available_count=obs.rate_limits.available_count,
+                detail_count=obs.rate_limits.detail_count,
+                has_unlisted_credits=obs.rate_limits.has_unlisted_credits,
+                credits=obs.rate_limits.credits,
+                raw_rate_limits={},
+                usage=RateLimitUsage(
+                    limit_id="codex",
+                    plan_type="team",
+                    primary=UsageWindowInfo(
+                        used_percent=33.3,
+                        window_duration_mins=10080,
+                        resets_at_utc="2026-08-05T12:00:00Z",
+                        resets_at_epoch=1785931200,
+                    ),
+                    secondary=None,
+                    credits=None,
+                    spend_control_reached=False,
+                    rate_limit_reached_type=None,
+                ),
+            ),
+            environment_drift_detected=obs.environment_drift_detected,
+            legacy_install_touched=obs.legacy_install_touched,
+            live_consume_allowed=obs.live_consume_allowed,
+        )
+        synchronize_notifier(
+            obs_with_usage,
+            store=self.store,
+            scheduler=self.scheduler,
+            now_utc=NOW,
+        )
+        status = sanitized_notifier_status(self.store)
+        self.assertIsNotNone(status.get("lastUsage"))
+        self.assertEqual(status["lastUsage"]["planType"], "team")
+        self.assertEqual(status["lastUsage"]["primary"]["usedPercent"], 33.3)
+
+    def test_state_store_v1_compatibility(self) -> None:
+        v1_state = {
+            "schemaVersion": 1,
+            "lastCheckAtUtc": "2026-07-30T12:00:00Z",
+            "lastCheckResult": "no_available_credit",
+            "scheduled": None,
+            "lastNotified": None,
+            "lastError": None,
+        }
+        state_file = self.store.root / "notifier-state.json"
+        import json
+        state_file.write_text(json.dumps(v1_state), encoding="utf-8")
+        loaded = self.store.load()
+        self.assertEqual(loaded["schemaVersion"], 1)
+        self.assertIsNone(loaded["lastUsage"])
+
+
+class UsageFormattingTests(unittest.TestCase):
+    def test_format_usage_bar(self) -> None:
+        self.assertIn("100.0%", format_usage_bar(100.0, width=10))
+        self.assertIn("0.0%", format_usage_bar(0.0, width=10))
+        self.assertIn("50.0%", format_usage_bar(50.0, width=10))
+        self.assertIn("?", format_usage_bar(None, width=10))
+
+    def test_format_window_duration(self) -> None:
+        self.assertEqual(format_window_duration(10080, language="en"), "7 days (weekly)")
+        self.assertEqual(format_window_duration(10080, language="ru"), "7 дней (недельное)")
+        self.assertEqual(format_window_duration(300, language="en"), "5 hours")
+        self.assertEqual(format_window_duration(300, language="ru"), "5 часов")
+        self.assertEqual(format_window_duration(60, language="en"), "1 hour")
+        self.assertEqual(format_window_duration(60, language="ru"), "1 час")
+
+    def test_format_rate_limit_usage_report(self) -> None:
+        usage = RateLimitUsage(
+            limit_id="codex",
+            plan_type="plus",
+            primary=UsageWindowInfo(
+                used_percent=20.0,
+                window_duration_mins=10080,
+                resets_at_utc="2026-08-01T12:00:00Z",
+                resets_at_epoch=1754049600,
+            ),
+            secondary=UsageWindowInfo(
+                used_percent=50.0,
+                window_duration_mins=300,
+                resets_at_utc="2026-07-30T17:00:00Z",
+                resets_at_epoch=1753894800,
+            ),
+            credits=None,
+            spend_control_reached=False,
+            rate_limit_reached_type=None,
+        )
+        report_en = format_rate_limit_usage_report(usage, language="en", now_utc=NOW)
+        report_text_en = "\n".join(report_en)
+        self.assertIn("Plan: plus", report_text_en)
+        self.assertIn("Primary limit window", report_text_en)
+        self.assertIn("Secondary limit window", report_text_en)
+        self.assertIn("20.0%", report_text_en)
+
+        report_ru = format_rate_limit_usage_report(usage, language="ru", now_utc=NOW)
+        report_text_ru = "\n".join(report_ru)
+        self.assertIn("Тариф: plus", report_text_ru)
+        self.assertIn("Основной лимит", report_text_ru)
+        self.assertIn("Вторичный лимит", report_text_ru)
+
 
 class NotifierTaskContractTests(unittest.TestCase):
     def test_one_shot_xml_is_modal_friendly_and_wake_capable(self) -> None:
@@ -475,3 +590,4 @@ class NotifierTaskContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

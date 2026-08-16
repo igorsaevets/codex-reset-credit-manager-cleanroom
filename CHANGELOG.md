@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 - 2026-08-16
+
+- add live rate-limit usage and quota inspection from `codex app-server` (`primary` and `secondary` windows, `usedPercent`, `resetsAt`, window duration, account credits, and spend control)
+- add dedicated `usage` CLI command with visual progress bar, quota percentage, and localized reset countdowns (Russian / English / JSON)
+- add interactive read-only desktop status monitor GUI (`gui`) with live gauges and asynchronous refresh
+- enhance `observe-rate-limits` and `notifier-status` with structured usage reporting
+- persist sanitized `lastUsage` snapshots in state store (`schemaVersion: 2` with seamless v1 backward compatibility)
+- add comprehensive test coverage for usage parsing, progress bar rendering, duration formatting, and state migration
+
 ## 0.2.1 - 2026-07-31
 
 - show days, hours, minutes, and seconds remaining when the modal opens

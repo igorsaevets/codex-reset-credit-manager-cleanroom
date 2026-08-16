@@ -10,6 +10,7 @@ from codex_reset_credit_manager.app_server import (
     observe_app_server_rate_limits,
     parse_codex_binary_command,
     parse_flexible_timestamp,
+    parse_rate_limit_usage,
 )
 from codex_reset_credit_manager.cli import main
 from codex_reset_credit_manager.config import AppConfig
@@ -287,4 +288,81 @@ class AppServerReadTests(unittest.TestCase):
             parse_codex_binary_command(f'"{sys.executable}" "{self.fake_script}" --mode normal'),
             [sys.executable, self.fake_script, "--mode", "normal"],
         )
+
+    def test_parse_rate_limit_usage(self) -> None:
+        raw = {
+            "limitId": "codex",
+            "planType": "team",
+            "primary": {
+                "usedPercent": 42.5,
+                "windowDurationMins": 10080,
+                "resetsAt": 1754136000,
+            },
+            "secondary": {
+                "usedPercent": 5,
+                "windowDurationMins": 300,
+                "resetsAt": "2026-08-02T12:00:00Z",
+            },
+            "credits": {
+                "hasCredits": True,
+                "unlimited": False,
+                "balance": 100.0,
+            },
+            "spendControlReached": True,
+            "rateLimitReachedType": "spend_limit",
+        }
+        usage = parse_rate_limit_usage(raw)
+        self.assertIsNotNone(usage)
+        self.assertEqual(usage.limit_id, "codex")
+        self.assertEqual(usage.plan_type, "team")
+        self.assertIsNotNone(usage.primary)
+        self.assertEqual(usage.primary.used_percent, 42.5)
+        self.assertEqual(usage.primary.window_duration_mins, 10080)
+        self.assertEqual(usage.primary.resets_at_epoch, 1754136000)
+        self.assertIsNotNone(usage.secondary)
+        self.assertEqual(usage.secondary.used_percent, 5.0)
+        self.assertEqual(usage.secondary.window_duration_mins, 300)
+        self.assertTrue(usage.spend_control_reached)
+        self.assertEqual(usage.rate_limit_reached_type, "spend_limit")
+        self.assertIsNotNone(usage.credits)
+        self.assertTrue(usage.credits.has_credits)
+        self.assertFalse(usage.credits.unlimited)
+        self.assertEqual(usage.credits.balance, 100.0)
+
+    def test_normal_observation_parses_usage(self) -> None:
+        cmd_override = [
+            sys.executable,
+            self.fake_script,
+            "--mode",
+            "normal",
+            "--codex-home",
+            str(self.child_codex_home),
+        ]
+        report = observe_app_server_rate_limits(
+            self.config,
+            command_override=cmd_override,
+        )
+        self.assertIsNotNone(report.rate_limits.usage)
+        self.assertEqual(report.rate_limits.usage.plan_type, "plus")
+        self.assertIsNotNone(report.rate_limits.usage.primary)
+        self.assertEqual(report.rate_limits.usage.primary.used_percent, 25.0)
+        self.assertEqual(report.rate_limits.usage.primary.window_duration_mins, 10080)
+        self.assertIsNotNone(report.rate_limits.usage.secondary)
+        self.assertEqual(report.rate_limits.usage.secondary.used_percent, 15.0)
+
+    def test_cli_usage_command(self) -> None:
+        binary_arg = f'"{sys.executable}" "{self.fake_script}" --mode normal --codex-home "{self.child_codex_home}"'
+        exit_code = main(
+            [
+                "--root",
+                str(self.draft_root),
+                "usage",
+                "--allow-live-read",
+                "--json",
+                "--codex-binary",
+                binary_arg,
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+
 

@@ -57,12 +57,39 @@ class CreditDetail:
 
 
 @dataclass(frozen=True)
+class UsageWindowInfo:
+    used_percent: float | None
+    window_duration_mins: int | None
+    resets_at_utc: str | None
+    resets_at_epoch: int | None
+
+
+@dataclass(frozen=True)
+class RateLimitCreditsInfo:
+    has_credits: bool | None
+    unlimited: bool | None
+    balance: float | None
+
+
+@dataclass(frozen=True)
+class RateLimitUsage:
+    limit_id: str | None
+    plan_type: str | None
+    primary: UsageWindowInfo | None
+    secondary: UsageWindowInfo | None
+    credits: RateLimitCreditsInfo | None
+    spend_control_reached: bool | None
+    rate_limit_reached_type: str | None
+
+
+@dataclass(frozen=True)
 class RateLimitInfo:
     available_count: int | None
     detail_count: int
     has_unlisted_credits: bool
     credits: tuple[CreditDetail, ...]
     raw_rate_limits: dict
+    usage: RateLimitUsage | None = None
 
 
 @dataclass(frozen=True)

@@ -23,10 +23,14 @@ from .notifier import (
     StateStore,
     WindowsTaskScheduler,
     display_scheduled_notice,
+    format_rate_limit_usage_report,
+    format_usage_bar,
+    format_window_duration,
     parse_expiry_utc,
     plan_as_dict,
     record_notifier_error,
     sanitized_notifier_status,
+    show_status_gui,
     synchronize_notifier,
 )
 from .planner import build_planning_windows, parse_utc_timestamp
@@ -153,6 +157,31 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_observation_arguments(observe)
     observe.add_argument("--json", action="store_true", help="emit machine-readable JSON")
 
+    usage_cmd = commands.add_parser(
+        "usage",
+        help="display current Codex rate-limit usage, progress bar, and reset countdowns",
+    )
+    _add_observation_arguments(usage_cmd)
+    usage_cmd.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    usage_cmd.add_argument(
+        "--language",
+        choices=("auto", "en", "ru"),
+        default="auto",
+        help="output language (default: auto)",
+    )
+
+    gui_cmd = commands.add_parser(
+        "gui",
+        help="open the interactive desktop status monitor for usage and reset credits",
+    )
+    _add_observation_arguments(gui_cmd)
+    gui_cmd.add_argument(
+        "--language",
+        choices=("auto", "en", "ru"),
+        default="auto",
+        help="UI language (default: auto)",
+    )
+
     notifier_sync = commands.add_parser(
         "notifier-sync",
         help="read reset expiries and reconcile one T-12-hour reminder",
@@ -215,6 +244,15 @@ def _observe(
 
 
 def main(argv: list[str] | None = None) -> int:
+    if sys.platform == "win32":
+        try:
+            if hasattr(sys.stdout, "reconfigure"):
+                sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            if hasattr(sys.stderr, "reconfigure"):
+                sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     parser = _build_parser()
     args = parser.parse_args(argv)
     config = load_config(args.root)
@@ -324,6 +362,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  Account Auth Req:    {report.account.requires_openai_auth}")
         print(f"  Account Email:       {report.account.email_masked or 'none/hidden'}")
         print(f"  Account Plan:        {report.account.plan_type or 'unknown'}")
+
+        if report.rate_limits.usage is not None:
+            print("  Usage & Quota:")
+            for line in format_rate_limit_usage_report(report.rate_limits.usage, language="en"):
+                print(f"    {line}")
+
         print(f"  Available Credits:   {report.rate_limits.available_count if report.rate_limits.available_count is not None else 'unknown'}")
         print(f"  Detail Rows Count:   {report.rate_limits.detail_count}")
         print(f"  Unlisted Credits:    {report.rate_limits.has_unlisted_credits}")
@@ -339,6 +383,61 @@ def main(argv: list[str] | None = None) -> int:
                 )
         else:
             print("  Credit Details:      none listed")
+        return 0
+
+    if args.command == "usage":
+        if not args.allow_live_read:
+            sys.stderr.write(
+                "Error: Usage inspection requires explicit opt-in. Re-run with --allow-live-read.\n"
+            )
+            return 1
+        try:
+            report = _observe(config, args.codex_binary, args.account_codex_home)
+        except AppServerObservationError as exc:
+            sys.stderr.write(f"Usage observation failed: {exc}\n")
+            return 1
+
+        if args.json:
+            usage_dict = asdict(report.rate_limits.usage) if report.rate_limits.usage else {}
+            return _print_json(usage_dict)
+
+        lang = "ru" if (args.language == "ru" or (args.language == "auto" and "ru" in (os.environ.get("LANG", "") + os.environ.get("LC_ALL", "")).lower())) else "en"
+        if args.language in {"en", "ru"}:
+            lang = args.language
+
+        if report.rate_limits.usage is not None:
+            for line in format_rate_limit_usage_report(report.rate_limits.usage, language=lang):
+                print(line)
+        else:
+            print("No rate limit usage data reported." if lang != "ru" else "Данные об использовании не получены.")
+
+        avail = report.rate_limits.available_count
+        if avail is not None:
+            if lang == "ru":
+                print(f"Доступно сбросов лимитов: {avail}")
+            else:
+                print(f"Available reset credits: {avail}")
+        return 0
+
+    if args.command == "gui":
+        if not args.allow_live_read:
+            sys.stderr.write(
+                "Error: Desktop monitor requires explicit opt-in. Re-run with --allow-live-read.\n"
+            )
+            return 1
+
+        def _fetch() -> Any:
+            return _observe(config, args.codex_binary, args.account_codex_home)
+
+        try:
+            show_status_gui(
+                _fetch,
+                language=args.language,
+                store=StateStore(config.root),
+            )
+        except Exception as exc:
+            sys.stderr.write(f"GUI launch failed: {exc}\n")
+            return 1
         return 0
 
     if args.command == "notifier-sync":
@@ -397,6 +496,16 @@ def main(argv: list[str] | None = None) -> int:
             return _print_json(payload)
         print(f"Last check:       {payload['lastCheckAtUtc'] or 'never'}")
         print(f"Last result:      {payload['lastCheckResult'] or 'none'}")
+        last_usage = payload.get("lastUsage")
+        if isinstance(last_usage, dict):
+            primary = last_usage.get("primary")
+            if isinstance(primary, dict):
+                p_pct = primary.get("usedPercent")
+                p_mins = primary.get("windowDurationMins")
+                p_res = primary.get("resetsAtUtc")
+                bar = format_usage_bar(p_pct)
+                dur = format_window_duration(p_mins)
+                print(f"Last usage ({dur}): {bar} (resets: {p_res or 'n/a'})")
         scheduled = payload.get("scheduled")
         if isinstance(scheduled, dict):
             print(f"Scheduled expiry: {scheduled['expiresAtUtc']}")

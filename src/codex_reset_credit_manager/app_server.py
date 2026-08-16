@@ -18,7 +18,10 @@ from .models import (
     AppServerHandshakeInfo,
     CreditDetail,
     ObservationReport,
+    RateLimitCreditsInfo,
     RateLimitInfo,
+    RateLimitUsage,
+    UsageWindowInfo,
 )
 from .sanitized_env import build_child_environment
 
@@ -304,6 +307,118 @@ class AppServerTransport:
             pass
 
 
+def _parse_usage_window(data: Any) -> UsageWindowInfo | None:
+    if not isinstance(data, dict) or not data:
+        return None
+    used_percent_raw = data.get("usedPercent")
+    used_percent: float | None = None
+    if isinstance(used_percent_raw, (int, float)):
+        used_percent = float(used_percent_raw)
+    elif isinstance(used_percent_raw, str):
+        try:
+            used_percent = float(used_percent_raw.strip())
+        except ValueError:
+            pass
+
+    window_mins_raw = data.get("windowDurationMins")
+    window_duration_mins: int | None = None
+    if isinstance(window_mins_raw, int):
+        window_duration_mins = window_mins_raw
+    elif isinstance(window_mins_raw, (float, str)):
+        try:
+            window_duration_mins = int(window_mins_raw)
+        except (ValueError, OverflowError):
+            pass
+
+    resets_at_raw = data.get("resetsAt") or data.get("resets_at")
+    resets_at_utc: str | None = None
+    resets_at_epoch: int | None = None
+    if isinstance(resets_at_raw, (int, float)):
+        epoch_val = float(resets_at_raw)
+        if epoch_val > 1e11:
+            epoch_val /= 1000.0
+        try:
+            resets_at_epoch = int(epoch_val)
+            resets_at_utc = datetime.fromtimestamp(epoch_val, tz=timezone.utc).isoformat()
+        except (ValueError, OverflowError):
+            pass
+    elif isinstance(resets_at_raw, str) and resets_at_raw.strip():
+        try:
+            epoch_val = float(resets_at_raw.strip())
+            if epoch_val > 1e11:
+                epoch_val /= 1000.0
+            resets_at_epoch = int(epoch_val)
+            resets_at_utc = datetime.fromtimestamp(epoch_val, tz=timezone.utc).isoformat()
+        except ValueError:
+            try:
+                dt = datetime.fromisoformat(resets_at_raw.strip().replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                resets_at_epoch = int(dt.timestamp())
+                resets_at_utc = dt.astimezone(timezone.utc).isoformat()
+            except ValueError:
+                resets_at_utc = resets_at_raw.strip()
+
+    if used_percent is None and window_duration_mins is None and resets_at_utc is None:
+        return None
+
+    return UsageWindowInfo(
+        used_percent=used_percent,
+        window_duration_mins=window_duration_mins,
+        resets_at_utc=resets_at_utc,
+        resets_at_epoch=resets_at_epoch,
+    )
+
+
+def parse_rate_limit_usage(raw_rate_limits: Any) -> RateLimitUsage | None:
+    if not isinstance(raw_rate_limits, dict) or not raw_rate_limits:
+        return None
+
+    limit_id = raw_rate_limits.get("limitId")
+    if limit_id is not None:
+        limit_id = str(limit_id)
+
+    plan_type = raw_rate_limits.get("planType")
+    if plan_type is not None:
+        plan_type = str(plan_type)
+
+    primary = _parse_usage_window(raw_rate_limits.get("primary"))
+    secondary = _parse_usage_window(raw_rate_limits.get("secondary"))
+
+    credits_obj = raw_rate_limits.get("credits")
+    credits_info: RateLimitCreditsInfo | None = None
+    if isinstance(credits_obj, dict):
+        has_credits = credits_obj.get("hasCredits")
+        unlimited = credits_obj.get("unlimited")
+        bal = credits_obj.get("balance")
+        balance: float | None = None
+        if isinstance(bal, (int, float)):
+            balance = float(bal)
+        credits_info = RateLimitCreditsInfo(
+            has_credits=bool(has_credits) if has_credits is not None else None,
+            unlimited=bool(unlimited) if unlimited is not None else None,
+            balance=balance,
+        )
+
+    spend_control_reached = raw_rate_limits.get("spendControlReached")
+    if spend_control_reached is not None:
+        spend_control_reached = bool(spend_control_reached)
+
+    rate_limit_reached_type = raw_rate_limits.get("rateLimitReachedType")
+    if rate_limit_reached_type is not None:
+        rate_limit_reached_type = str(rate_limit_reached_type)
+
+    return RateLimitUsage(
+        limit_id=limit_id,
+        plan_type=plan_type,
+        primary=primary,
+        secondary=secondary,
+        credits=credits_info,
+        spend_control_reached=spend_control_reached,
+        rate_limit_reached_type=rate_limit_reached_type,
+    )
+
+
 def observe_app_server_rate_limits(
     config: AppConfig,
     *,
@@ -429,12 +544,16 @@ def observe_app_server_rate_limits(
         available_count is not None and isinstance(available_count, int) and available_count > detail_count
     )
 
+    raw_rl = rl_res.get("rateLimits") if isinstance(rl_res.get("rateLimits"), dict) else {}
+    parsed_usage = parse_rate_limit_usage(raw_rl)
+
     rate_limits = RateLimitInfo(
         available_count=available_count,
         detail_count=detail_count,
         has_unlisted_credits=has_unlisted,
         credits=tuple(parsed_credits),
-        raw_rate_limits=rl_res.get("rateLimits") if isinstance(rl_res.get("rateLimits"), dict) else {},
+        raw_rate_limits=raw_rl,
+        usage=parsed_usage,
     )
 
     now_utc = datetime.now(timezone.utc).isoformat()
@@ -449,3 +568,4 @@ def observe_app_server_rate_limits(
         legacy_install_touched=False,
         live_consume_allowed=False,
     )
+

@@ -16,10 +16,12 @@ from html import escape as xml_escape
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
 
-from .models import CreditDetail, ObservationReport
+from . import __version__
+from .models import CreditDetail, ObservationReport, RateLimitUsage, UsageWindowInfo
 
 
-STATE_SCHEMA_VERSION = 1
+STATE_SCHEMA_VERSION = 2
+SUPPORTED_STATE_SCHEMA_VERSIONS = {1, 2}
 DEFAULT_LEAD_HOURS = 12
 DEFAULT_TASK_PREFIX = "CodexResetCreditNotifier"
 NOTICE_START_GRACE_SECONDS = 15
@@ -167,14 +169,27 @@ def _default_state() -> dict[str, Any]:
         "scheduled": None,
         "lastNotified": None,
         "lastError": None,
+        "lastUsage": None,
     }
 
 
 def _validate_state(value: Mapping[str, Any]) -> None:
-    if set(value) != set(_default_state()):
+    schema_ver = value.get("schemaVersion")
+    if schema_ver not in SUPPORTED_STATE_SCHEMA_VERSIONS:
+        raise NotifierError(f"Notifier state schema version {schema_ver} is unsupported.")
+
+    base_required = {
+        "schemaVersion",
+        "lastCheckAtUtc",
+        "lastCheckResult",
+        "scheduled",
+        "lastNotified",
+        "lastError",
+    }
+    allowed_keys = base_required | {"lastUsage"}
+    if not base_required.issubset(set(value)) or not set(value).issubset(allowed_keys):
         raise NotifierError("Notifier state has an unexpected shape.")
-    if value.get("schemaVersion") != STATE_SCHEMA_VERSION:
-        raise NotifierError("Notifier state schema is unsupported.")
+
     scheduled = value.get("scheduled")
     if scheduled is not None:
         required = {
@@ -199,6 +214,7 @@ def _validate_state(value: Mapping[str, Any]) -> None:
             if not isinstance(timestamp, str):
                 raise NotifierError("Scheduled notification timestamp is invalid.")
             parse_expiry_utc(timestamp)
+
     notified = value.get("lastNotified")
     if notified is not None:
         required = {
@@ -226,6 +242,189 @@ def _validate_state(value: Mapping[str, Any]) -> None:
                 raise NotifierError("Notification close timestamp is invalid.")
             parse_expiry_utc(closed_at)
 
+    last_usage = value.get("lastUsage")
+    if last_usage is not None and not isinstance(last_usage, dict):
+        raise NotifierError("Notifier lastUsage state must be an object or null.")
+
+
+def format_usage_bar(used_percent: float | None, width: int = 20) -> str:
+    if used_percent is None:
+        return f"[{'░' * width}] ?"
+    clamped = max(0.0, min(100.0, float(used_percent)))
+    filled_len = int(round((clamped / 100.0) * width))
+    bar = "█" * filled_len + "░" * (width - filled_len)
+    return f"[{bar}] {clamped:5.1f}%"
+
+
+def format_window_duration(duration_mins: int | None, language: str = "en") -> str:
+    if duration_mins is None:
+        return "unknown" if language != "ru" else "неизвестно"
+    if duration_mins == 10080:
+        return "7 days (weekly)" if language != "ru" else "7 дней (недельное)"
+    if duration_mins == 300:
+        return "5 hours" if language != "ru" else "5 часов"
+    if duration_mins == 60:
+        return "1 hour" if language != "ru" else "1 час"
+
+    days, rem = divmod(duration_mins, 1440)
+    hours, mins = divmod(rem, 60)
+    parts = []
+    if language == "ru":
+        if days:
+            parts.append(_russian_unit(days, "день", "дня", "дней"))
+        if hours:
+            parts.append(_russian_unit(hours, "час", "часа", "часов"))
+        if mins or not parts:
+            parts.append(_russian_unit(mins, "минута", "минуты", "минут"))
+    else:
+        if days:
+            parts.append(f"{days} day{'s' if days != 1 else ''}")
+        if hours:
+            parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+        if mins or not parts:
+            parts.append(f"{mins} min{'s' if mins != 1 else ''}")
+    return " ".join(parts)
+
+
+def format_usage_time_remaining(
+    resets_at_raw: str | int | float | None,
+    *,
+    now_utc: datetime,
+    language: str = "en",
+) -> str:
+    if resets_at_raw is None:
+        return "n/a" if language != "ru" else "н/д"
+    try:
+        if isinstance(resets_at_raw, (int, float)):
+            resets_dt = datetime.fromtimestamp(float(resets_at_raw), tz=timezone.utc)
+        else:
+            resets_dt = parse_expiry_utc(str(resets_at_raw))
+    except Exception:
+        return str(resets_at_raw)
+
+    diff_seconds = int((resets_dt.astimezone(timezone.utc) - now_utc.astimezone(timezone.utc)).total_seconds())
+    if diff_seconds <= 0:
+        return "resets now" if language != "ru" else "сбрасывается сейчас"
+
+    days, rem = divmod(diff_seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, _ = divmod(rem, 60)
+
+    if language == "ru":
+        parts = []
+        if days:
+            parts.append(_russian_unit(days, "день", "дня", "дней"))
+        if days or hours:
+            parts.append(_russian_unit(hours, "час", "часа", "часов"))
+        parts.append(_russian_unit(minutes, "минута", "минуты", "минут"))
+        return "через " + " ".join(parts)
+    else:
+        parts = []
+        if days:
+            parts.append(f"{days}d")
+        if days or hours:
+            parts.append(f"{hours}h")
+        parts.append(f"{minutes}m")
+        return f"in {' '.join(parts)}"
+
+
+def _format_local_or_utc(timestamp_str: str | None) -> str:
+    if not timestamp_str:
+        return "n/a"
+    try:
+        dt = parse_expiry_utc(timestamp_str)
+        local_dt = dt.astimezone()
+        return local_dt.strftime("%Y-%m-%d %H:%M:%S %Z")
+    except Exception:
+        return str(timestamp_str)
+
+
+def sanitize_usage_record(usage: RateLimitUsage, *, now_utc: datetime) -> dict[str, Any]:
+    def _win_dict(w: UsageWindowInfo | None) -> dict[str, Any] | None:
+        if w is None:
+            return None
+        return {
+            "usedPercent": w.used_percent,
+            "windowDurationMins": w.window_duration_mins,
+            "resetsAtUtc": w.resets_at_utc,
+            "resetsAtEpoch": w.resets_at_epoch,
+        }
+
+    credits_dict = None
+    if usage.credits is not None:
+        credits_dict = {
+            "hasCredits": usage.credits.has_credits,
+            "unlimited": usage.credits.unlimited,
+            "balance": usage.credits.balance,
+        }
+
+    return {
+        "checkedAtUtc": _utc_iso(now_utc),
+        "planType": usage.plan_type,
+        "primary": _win_dict(usage.primary),
+        "secondary": _win_dict(usage.secondary),
+        "credits": credits_dict,
+        "spendControlReached": usage.spend_control_reached,
+        "rateLimitReachedType": usage.rate_limit_reached_type,
+    }
+
+
+def format_rate_limit_usage_report(
+    usage: RateLimitUsage,
+    *,
+    language: str = "en",
+    now_utc: datetime | None = None,
+) -> list[str]:
+    effective_now = now_utc or datetime.now(timezone.utc)
+    lines: list[str] = []
+    is_ru = language == "ru"
+    plan_title = "Plan" if not is_ru else "Тариф"
+    lines.append(f"{plan_title}: {usage.plan_type or 'unknown'}")
+
+    if usage.primary is not None:
+        p = usage.primary
+        dur_text = format_window_duration(p.window_duration_mins, language=language)
+        bar = format_usage_bar(p.used_percent, width=20)
+        rem_pct = f"{max(0.0, 100.0 - (p.used_percent or 0.0)):.1f}%"
+        rem_time = format_usage_time_remaining(p.resets_at_utc, now_utc=effective_now, language=language)
+
+        if is_ru:
+            lines.append(f"Основной лимит ({dur_text}):")
+            lines.append(f"  Использовано:   {bar} (осталось {rem_pct})")
+            lines.append(f"  Сброс лимита:   {rem_time} ({_format_local_or_utc(p.resets_at_utc)})")
+        else:
+            lines.append(f"Primary limit window ({dur_text}):")
+            lines.append(f"  Usage:          {bar} ({rem_pct} remaining)")
+            lines.append(f"  Resets:         {rem_time} ({_format_local_or_utc(p.resets_at_utc)})")
+
+    if usage.secondary is not None:
+        s = usage.secondary
+        dur_text = format_window_duration(s.window_duration_mins, language=language)
+        bar = format_usage_bar(s.used_percent, width=20)
+        rem_pct = f"{max(0.0, 100.0 - (s.used_percent or 0.0)):.1f}%"
+        rem_time = format_usage_time_remaining(s.resets_at_utc, now_utc=effective_now, language=language)
+
+        if is_ru:
+            lines.append(f"Вторичный лимит ({dur_text}):")
+            lines.append(f"  Использовано:   {bar} (осталось {rem_pct})")
+            lines.append(f"  Сброс лимита:   {rem_time} ({_format_local_or_utc(s.resets_at_utc)})")
+        else:
+            lines.append(f"Secondary limit window ({dur_text}):")
+            lines.append(f"  Usage:          {bar} ({rem_pct} remaining)")
+            lines.append(f"  Resets:         {rem_time} ({_format_local_or_utc(s.resets_at_utc)})")
+
+    if usage.credits is not None:
+        c = usage.credits
+        if is_ru:
+            lines.append(f"Кредиты аккаунта: {'активны' if c.has_credits else 'нет'} (безлимит: {c.unlimited})")
+        else:
+            lines.append(f"Account credits: {'active' if c.has_credits else 'none'} (unlimited: {c.unlimited})")
+
+    if usage.spend_control_reached:
+        lines.append("[!] Предел расходов достигнут (spend control reached)" if is_ru else "[!] Spend control reached")
+
+    return lines
+
 
 class StateStore:
     def __init__(self, root: Path) -> None:
@@ -243,6 +442,8 @@ class StateStore:
         if not isinstance(value, dict):
             raise NotifierError("Notifier state is not a JSON object.")
         _validate_state(value)
+        if "lastUsage" not in value:
+            value["lastUsage"] = None
         return value
 
     def save(self, value: Mapping[str, Any]) -> None:
@@ -596,6 +797,8 @@ def synchronize_notifier(
         state = store.load()
         state["lastCheckAtUtc"] = _utc_iso(now_utc)
         state["lastError"] = None
+        if report.rate_limits.usage is not None:
+            state["lastUsage"] = sanitize_usage_record(report.rate_limits.usage, now_utc=now_utc)
         old = state.get("scheduled")
 
         if isinstance(old, dict):
@@ -913,3 +1116,295 @@ def sanitized_notifier_status(store: StateStore) -> dict[str, Any]:
 
 def plan_as_dict(plan: NotificationPlan) -> dict[str, Any]:
     return asdict(plan)
+
+
+def _is_system_russian() -> bool:
+    try:
+        import locale
+        loc = locale.getdefaultlocale()[0] or ""
+        if loc.lower().startswith("ru"):
+            return True
+    except Exception:
+        pass
+    lang_env = os.environ.get("LANG", "") + os.environ.get("LC_ALL", "")
+    return "ru" in lang_env.lower()
+
+
+def show_status_gui(
+    fetch_report: Callable[[], ObservationReport],
+    *,
+    language: str = "auto",
+    store: StateStore | None = None,
+) -> None:
+    """Display a live, read-only desktop status monitor for Codex usage & reset credits."""
+    import tkinter as tk
+    from tkinter import messagebox, ttk
+    import queue
+    import threading
+
+    current_lang = "ru" if (language == "ru" or (language == "auto" and _is_system_russian())) else "en"
+
+    root = tk.Tk()
+    root.geometry("640x580")
+    root.minsize(580, 500)
+    root.configure(background="#0F172A")
+
+    # Set icon if available, configure font
+    with contextlib.suppress(Exception):
+        root.option_add("*Font", ("Segoe UI", 9))
+
+    style = ttk.Style(root)
+    with contextlib.suppress(Exception):
+        style.theme_use("clam")
+
+    # Color Palette (Dark slate / Clean aesthetic)
+    bg_dark = "#0F172A"
+    card_bg = "#1E293B"
+    card_border = "#334155"
+    text_white = "#F8FAFC"
+    text_muted = "#94A3B8"
+    accent_blue = "#38BDF8"
+    green_ok = "#34D399"
+    yellow_warn = "#FBBF24"
+    red_alert = "#F87171"
+
+    style.configure("Main.TFrame", background=bg_dark)
+    style.configure("Card.TFrame", background=card_bg, relief="solid", borderwidth=1)
+    style.configure("Inner.TFrame", background=card_bg)
+    style.configure("Title.TLabel", background=bg_dark, foreground=text_white, font=("Segoe UI", 15, "bold"))
+    style.configure("Subtitle.TLabel", background=bg_dark, foreground=text_muted, font=("Segoe UI", 9))
+    style.configure("CardHeader.TLabel", background=card_bg, foreground=accent_blue, font=("Segoe UI", 10, "bold"))
+    style.configure("CardTitle.TLabel", background=card_bg, foreground=text_white, font=("Segoe UI", 10, "bold"))
+    style.configure("CardLabel.TLabel", background=card_bg, foreground=text_muted, font=("Segoe UI", 9))
+    style.configure("CardValue.TLabel", background=card_bg, foreground=text_white, font=("Segoe UI", 9, "bold"))
+    style.configure("CardValueGreen.TLabel", background=card_bg, foreground=green_ok, font=("Segoe UI", 9, "bold"))
+    style.configure("CardValueYellow.TLabel", background=card_bg, foreground=yellow_warn, font=("Segoe UI", 9, "bold"))
+    style.configure("CardValueRed.TLabel", background=card_bg, foreground=red_alert, font=("Segoe UI", 9, "bold"))
+    style.configure("Footer.TLabel", background=bg_dark, foreground=text_muted, font=("Segoe UI", 8))
+    style.configure("Action.TButton", font=("Segoe UI", 9, "bold"), padding=(12, 6))
+
+    main_frame = ttk.Frame(root, style="Main.TFrame", padding=(20, 16, 20, 16))
+    main_frame.pack(fill="both", expand=True)
+
+    # Title Bar
+    title_label = ttk.Label(main_frame, text="", style="Title.TLabel")
+    title_label.pack(anchor="w")
+    subtitle_label = ttk.Label(main_frame, text="", style="Subtitle.TLabel")
+    subtitle_label.pack(anchor="w", pady=(2, 12))
+
+    # Content Container
+    content_frame = ttk.Frame(main_frame, style="Main.TFrame")
+    content_frame.pack(fill="both", expand=True)
+
+    # Card 1: Account & Plan
+    card_account = ttk.Frame(content_frame, style="Card.TFrame", padding=12)
+    card_account.pack(fill="x", pady=4)
+    lbl_acc_title = ttk.Label(card_account, text="", style="CardHeader.TLabel")
+    lbl_acc_title.pack(anchor="w")
+    lbl_acc_details = ttk.Label(card_account, text="", style="CardValue.TLabel")
+    lbl_acc_details.pack(anchor="w", pady=(2, 0))
+
+    # Card 2: Primary Limit Window Usage
+    card_primary = ttk.Frame(content_frame, style="Card.TFrame", padding=12)
+    card_primary.pack(fill="x", pady=4)
+    lbl_primary_title = ttk.Label(card_primary, text="", style="CardHeader.TLabel")
+    lbl_primary_title.pack(anchor="w")
+    lbl_primary_usage = ttk.Label(card_primary, text="", style="CardValue.TLabel")
+    lbl_primary_usage.pack(anchor="w", pady=(3, 0))
+    prog_primary = ttk.Progressbar(card_primary, orient="horizontal", mode="determinate", length=540)
+    prog_primary.pack(fill="x", pady=4)
+    lbl_primary_reset = ttk.Label(card_primary, text="", style="CardLabel.TLabel")
+    lbl_primary_reset.pack(anchor="w")
+
+    # Card 3: Secondary Limit Window (hidden if none)
+    card_secondary = ttk.Frame(content_frame, style="Card.TFrame", padding=12)
+    lbl_secondary_title = ttk.Label(card_secondary, text="", style="CardHeader.TLabel")
+    lbl_secondary_title.pack(anchor="w")
+    lbl_secondary_usage = ttk.Label(card_secondary, text="", style="CardValue.TLabel")
+    lbl_secondary_usage.pack(anchor="w", pady=(3, 0))
+    prog_secondary = ttk.Progressbar(card_secondary, orient="horizontal", mode="determinate", length=540)
+    prog_secondary.pack(fill="x", pady=4)
+    lbl_secondary_reset = ttk.Label(card_secondary, text="", style="CardLabel.TLabel")
+    lbl_secondary_reset.pack(anchor="w")
+
+    # Card 4: Reset Credits & Expiry
+    card_credits = ttk.Frame(content_frame, style="Card.TFrame", padding=12)
+    card_credits.pack(fill="x", pady=4)
+    lbl_credits_title = ttk.Label(card_credits, text="", style="CardHeader.TLabel")
+    lbl_credits_title.pack(anchor="w")
+    lbl_credits_info = ttk.Label(card_credits, text="", style="CardValue.TLabel")
+    lbl_credits_info.pack(anchor="w", pady=(2, 0))
+
+    # Card 5: Notifier Scheduler Status
+    card_notifier = ttk.Frame(content_frame, style="Card.TFrame", padding=12)
+    card_notifier.pack(fill="x", pady=4)
+    lbl_notifier_title = ttk.Label(card_notifier, text="", style="CardHeader.TLabel")
+    lbl_notifier_title.pack(anchor="w")
+    lbl_notifier_info = ttk.Label(card_notifier, text="", style="CardLabel.TLabel")
+    lbl_notifier_info.pack(anchor="w", pady=(2, 0))
+
+    # Status Message / Last Refreshed
+    status_bar = ttk.Label(main_frame, text="", style="Footer.TLabel")
+    status_bar.pack(anchor="w", pady=(8, 4))
+
+    # Action Buttons
+    btn_frame = ttk.Frame(main_frame, style="Main.TFrame")
+    btn_frame.pack(fill="x", pady=(4, 0))
+
+    btn_refresh = ttk.Button(btn_frame, text="", style="Action.TButton")
+    btn_refresh.pack(side="left")
+
+    btn_lang = ttk.Button(btn_frame, text="", style="Action.TButton")
+    btn_lang.pack(side="left", padx=10)
+
+    btn_close = ttk.Button(btn_frame, text="", style="Action.TButton", command=root.destroy)
+    btn_close.pack(side="right")
+
+    events: queue.Queue[tuple[str, Any]] = queue.Queue()
+    is_busy = False
+
+    def update_texts(lang: str) -> None:
+        is_r = lang == "ru"
+        root.title(f"Codex: Монитор использования и сбросов v{__version__}" if is_r else f"Codex Usage & Rate Limit Monitor v{__version__}")
+        title_label.config(text=f"Codex: Монитор лимитов и сбросов  v{__version__}" if is_r else f"Codex Usage & Rate Limit Monitor  v{__version__}")
+        subtitle_label.config(text=f"Версия {__version__} · Безопасный read-only мониторинг квоты и срока сбросов" if is_r else f"Version {__version__} · Safe, read-only rate-limit quota & reset expiry monitor")
+        lbl_acc_title.config(text="УЧЕТНАЯ ЗАПИСЬ И ТАРИФ" if is_r else "ACCOUNT & PLAN")
+        lbl_primary_title.config(text="ОСНОВНОЙ ЛИМИТ" if is_r else "PRIMARY USAGE LIMIT")
+        lbl_secondary_title.config(text="ВТОРИЧНЫЙ ЛИМИТ" if is_r else "SECONDARY USAGE LIMIT")
+        lbl_credits_title.config(text="ДОСТУПНЫЕ СБРОСЫ ЛИМИТОВ (RESET CREDITS)" if is_r else "RESET CREDITS INVENTORY")
+        lbl_notifier_title.config(text="СЛУЖБА НАПОМИНАНИЙ (NOTIFIER)" if is_r else "DAILY NOTIFIER STATUS")
+        btn_refresh.config(text="Обновить сейчас" if is_r else "Check Now")
+        btn_lang.config(text="English" if is_r else "Русский")
+        btn_close.config(text="Закрыть" if is_r else "Close")
+
+    def toggle_lang() -> None:
+        nonlocal current_lang
+        current_lang = "en" if current_lang == "ru" else "ru"
+        update_texts(current_lang)
+        if latest_report is not None:
+            render_report(latest_report, current_lang)
+
+    btn_lang.config(command=toggle_lang)
+
+    latest_report: ObservationReport | None = None
+
+    def render_report(report: ObservationReport, lang: str) -> None:
+        nonlocal latest_report
+        latest_report = report
+        is_r = lang == "ru"
+        now_utc = datetime.now(timezone.utc)
+
+        # 1. Account
+        email = report.account.email_masked or ("неизвестен" if is_r else "unknown")
+        plan = report.account.plan_type or ("неизвестен" if is_r else "unknown")
+        lbl_acc_details.config(text=f"Email: {email}   |   {'Тариф' if is_r else 'Plan'}: {plan.upper()}   |   Mode: Read-Only")
+
+        # 2. Usage
+        usage = report.rate_limits.usage
+        if usage is not None and usage.primary is not None:
+            p = usage.primary
+            dur_text = format_window_duration(p.window_duration_mins, language=lang)
+            lbl_primary_title.config(text=f"{'ОСНОВНОЙ ЛИМИТ' if is_r else 'PRIMARY LIMIT'} ({dur_text})")
+            used = p.used_percent if p.used_percent is not None else 0.0
+            rem_pct = max(0.0, 100.0 - used)
+            lbl_primary_usage.config(text=f"{used:5.1f}% {'использовано' if is_r else 'used'}  ({rem_pct:5.1f}% {'осталось' if is_r else 'remaining'})")
+            prog_primary["value"] = min(100.0, max(0.0, used))
+
+            rem_time = format_usage_time_remaining(p.resets_at_utc, now_utc=now_utc, language=lang)
+            resets_local = _format_local_or_utc(p.resets_at_utc)
+            lbl_primary_reset.config(text=f"{'Сброс лимита' if is_r else 'Window resets'}: {rem_time} ({resets_local})")
+        else:
+            lbl_primary_usage.config(text="Данные о лимитах недоступны" if is_r else "No rate-limit usage reported")
+            prog_primary["value"] = 0
+            lbl_primary_reset.config(text="")
+
+        # 3. Secondary window
+        if usage is not None and usage.secondary is not None:
+            card_secondary.pack(fill="x", pady=4, after=card_primary)
+            s = usage.secondary
+            dur_text = format_window_duration(s.window_duration_mins, language=lang)
+            lbl_secondary_title.config(text=f"{'ВТОРИЧНЫЙ ЛИМИТ' if is_r else 'SECONDARY LIMIT'} ({dur_text})")
+            used_s = s.used_percent if s.used_percent is not None else 0.0
+            rem_pct_s = max(0.0, 100.0 - used_s)
+            lbl_secondary_usage.config(text=f"{used_s:5.1f}% {'использовано' if is_r else 'used'}  ({rem_pct_s:5.1f}% {'осталось' if is_r else 'remaining'})")
+            prog_secondary["value"] = min(100.0, max(0.0, used_s))
+            rem_time_s = format_usage_time_remaining(s.resets_at_utc, now_utc=now_utc, language=lang)
+            resets_local_s = _format_local_or_utc(s.resets_at_utc)
+            lbl_secondary_reset.config(text=f"{'Сброс лимита' if is_r else 'Window resets'}: {rem_time_s} ({resets_local_s})")
+        else:
+            card_secondary.pack_forget()
+
+        # 4. Credits
+        avail = report.rate_limits.available_count
+        credits_list = report.rate_limits.credits
+        if avail and avail > 0 and credits_list:
+            nearest = credits_list[0]
+            exp_time = format_usage_time_remaining(nearest.expires_at, now_utc=now_utc, language=lang)
+            exp_local = _format_local_or_utc(nearest.expires_at)
+            lbl_credits_info.config(
+                text=f"{avail} {'доступно' if is_r else 'available'}   |   {'Ближайшее истечение' if is_r else 'Nearest expiry'}: {exp_time} ({exp_local})"
+            )
+        else:
+            lbl_credits_info.config(text="0 доступных сбросов лимитов" if is_r else "0 available reset credits")
+
+        # 5. Notifier state
+        if store is not None:
+            try:
+                st = sanitized_notifier_status(store)
+                last_chk = _format_local_or_utc(st.get("lastCheckAtUtc"))
+                scheduled = st.get("scheduled")
+                if isinstance(scheduled, dict):
+                    rem_target = _format_local_or_utc(scheduled.get("scheduledForUtc"))
+                    lbl_notifier_info.config(
+                        text=f"{'Последняя проверка' if is_r else 'Last check'}: {last_chk}   |   {'Напоминание запланировано на' if is_r else 'Reminder scheduled for'}: {rem_target}"
+                    )
+                else:
+                    lbl_notifier_info.config(
+                        text=f"{'Последняя проверка' if is_r else 'Last check'}: {last_chk}   |   {'Нет запланированных окон T-12' if is_r else 'No active T-12 notice scheduled'}"
+                    )
+            except Exception:
+                lbl_notifier_info.config(text="Статус службы недоступен" if is_r else "Notifier state unavailable")
+        else:
+            lbl_notifier_info.config(text="Автономный режим (без StateStore)" if is_r else "Standalone mode (no StateStore)")
+
+        local_now = now_utc.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        status_bar.config(text=f"{'Обновлено' if is_r else 'Last updated'}: {local_now}")
+
+    def fetch_worker() -> None:
+        try:
+            rep = fetch_observation()
+            events.put(("success", rep))
+        except Exception as exc:
+            events.put(("error", str(exc)))
+
+    def trigger_refresh() -> None:
+        nonlocal is_busy
+        if is_busy:
+            return
+        is_busy = True
+        btn_refresh.config(state="disabled")
+        status_bar.config(text="Запрос данных от Codex app-server..." if current_lang == "ru" else "Querying Codex app-server...")
+        threading.Thread(target=fetch_worker, daemon=True).start()
+
+    btn_refresh.config(command=trigger_refresh)
+
+    def process_queue() -> None:
+        nonlocal is_busy
+        try:
+            while True:
+                kind, data = events.get_nowait()
+                is_busy = False
+                btn_refresh.config(state="normal")
+                if kind == "success":
+                    render_report(data, current_lang)
+                else:
+                    status_bar.config(text=f"{'Ошибка обновления' if current_lang == 'ru' else 'Update error'}: {data}")
+        except queue.Empty:
+            pass
+        root.after(100, process_queue)
+
+    update_texts(current_lang)
+    trigger_refresh()
+    root.after(100, process_queue)
+    root.mainloop()
+

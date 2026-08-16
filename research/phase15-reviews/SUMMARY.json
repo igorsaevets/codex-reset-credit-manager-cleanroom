@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-07-27T07:24:36.424219+00:00",
+  "tier": "deep",
+  "marker": "REVIEW-COMPLETE-PHASE15-20260727",
+  "brief_chars": 5575,
+  "channels": {
+    "gemini": {
+      "channel": "gemini",
+      "model": "gemini-3.1-pro-high",
+      "ok": true,
+      "seconds": 14.4,
+      "input_tokens": null,
+      "output_tokens": null,
+      "tool_calls": null,
+      "stop_reason": null,
+      "exit": 0,
+      "output_bytes": 12320,
+      "marker_at_end": true,
+      "marker_unique": true,
+      "failures": [],
+      "notes": []
+    }
+  }
+}

@@ -149,7 +149,27 @@ def main() -> int:
             else:
                 # normal
                 res = {
-                    "rateLimits": {},
+                    "rateLimits": {
+                        "limitId": "codex",
+                        "planType": "plus",
+                        "primary": {
+                            "usedPercent": 25.0,
+                            "windowDurationMins": 10080,
+                            "resetsAt": 1754136000,
+                        },
+                        "secondary": {
+                            "usedPercent": 15.0,
+                            "windowDurationMins": 300,
+                            "resetsAt": 1753550000,
+                        },
+                        "credits": {
+                            "hasCredits": True,
+                            "unlimited": False,
+                            "balance": None,
+                        },
+                        "spendControlReached": False,
+                        "rateLimitReachedType": None,
+                    },
                     "rateLimitsByLimitId": None,
                     "rateLimitResetCredits": {
                         "availableCount": 1,
