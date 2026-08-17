@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.3 - 2026-08-17
+
+- fix `NameError` crash in GUI monitor startup caused by unimported `contextlib` module
+
 ## 0.3.2 - 2026-08-16
 
 - add monthly GitHub repository update checker with 30-day throttle and automatic prompt
