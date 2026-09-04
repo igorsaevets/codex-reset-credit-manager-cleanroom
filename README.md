@@ -10,15 +10,17 @@
 
 ---
 
-Read-only Windows monitor and notifier for OpenAI Codex usage-limit reset expiry and real-time rate limit tracking. It queries the local Codex app-server, inspects live primary and secondary quota usage (`usedPercent`, `windowDurationMins`, `resetsAt`), reads available reset credits, and schedules one persistent modal reminder for 12 hours before a reset expires.
+Read-only Windows monitor and notifier for OpenAI Codex rate-limit usage (both 5-hour short-term and 7-day weekly limits), reset-credit inventory, and expiry reminders. It queries the local Codex app-server, inspects live quota usage (`usedPercent`, `windowDurationMins`, `resetsAt`), displays localized replenishment countdowns, and schedules a persistent modal reminder for 12 hours before a reset expires.
 
-> **Short answer:** this tool shows you live Codex rate-limit usage and tells you the exact local date and time when the nearest saved Codex usage-limit reset expires. It does not activate, redeem, consume, create, or extend a reset.
+> **Short answer:** this tool monitors live Codex 5-hour and weekly request limits in real time, alerts you when limits replenish, and shows the exact local date and time when your nearest saved Codex usage-limit reset expires. It does not activate, redeem, consume, create, or extend a reset.
 
-Version **0.3.2** introduces:
-- **ChatGPT-Inspired App Icon**: Custom cyan/emerald cyclic vortex icon across Desktop, Start Menu, Window headers, and Taskbar.
-- **Monthly Repository Update Checker**: Automatic background check (throttled to 1/month) with in-app banner to easily update.
-- **Interactive Desktop GUI Monitor**: Live usage gauges, real-time quota inspection, and Russian/English toggle.
+Version **0.3.4** introduces:
+- **Unified 5-Hour & Weekly Limit Tracking**: Distinguishes between OpenAI's reinstated 5-hour short-term window and 7-day weekly quota.
+- **Dual Replenishment Countdowns**: Live localized countdowns and timestamps for both 5-hour and weekly window resets.
+- **Interactive Desktop GUI Monitor**: Live dual progress gauges with semantic color-coding (green/yellow/red) and Russian/English toggle.
 - **`usage` CLI Command**: ASCII progress bars and countdowns directly in terminal.
+- **Monthly Repository Update Checker**: Automatic background check (throttled to 1/month) with in-app banner for GitHub updates.
+- **ChatGPT-Inspired App Icon**: Custom cyan/emerald cyclic vortex icon across Desktop, Start Menu, Window headers, and Taskbar.
 
 ## What it does
 
