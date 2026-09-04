@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.4 - 2026-09-04
+
+- unify and dynamically distinguish 5-hour and weekly usage limit windows and reset countdowns in CLI and desktop GUI
+- fix `import os` in CLI observation routine and default `--account-codex-home` to user's active `~/.codex`
+- enhance desktop status cards with explicit 5-hour and weekly reset local timestamps
+
 ## 0.3.3 - 2026-08-17
 
 - fix `NameError` crash in GUI monitor startup caused by unimported `contextlib` module

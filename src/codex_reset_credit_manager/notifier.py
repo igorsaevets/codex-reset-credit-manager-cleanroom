@@ -401,13 +401,17 @@ def format_rate_limit_usage_report(
         bar = format_usage_bar(p.used_percent, width=20)
         rem_pct = f"{max(0.0, 100.0 - (p.used_percent or 0.0)):.1f}%"
         rem_time = format_usage_time_remaining(p.resets_at_utc, now_utc=effective_now, language=language)
+        is_5h = p.window_duration_mins is not None and p.window_duration_mins <= 720
+        is_wk = p.window_duration_mins is not None and p.window_duration_mins > 720
+        tag_desc = "лимит 5 часов" if is_5h else ("недельный лимит" if is_wk else "основной")
+        tag_desc_en = "5-hour limit" if is_5h else ("weekly limit" if is_wk else "primary")
 
         if is_ru:
-            lines.append(f"Основной лимит ({dur_text}):")
+            lines.append(f"Основной лимит ({tag_desc}, {dur_text}):")
             lines.append(f"  Использовано:   {bar} (осталось {rem_pct})")
             lines.append(f"  Сброс лимита:   {rem_time} ({_format_local_or_utc(p.resets_at_utc)})")
         else:
-            lines.append(f"Primary limit window ({dur_text}):")
+            lines.append(f"Primary limit window ({tag_desc_en}, {dur_text}):")
             lines.append(f"  Usage:          {bar} ({rem_pct} remaining)")
             lines.append(f"  Resets:         {rem_time} ({_format_local_or_utc(p.resets_at_utc)})")
 
@@ -417,13 +421,17 @@ def format_rate_limit_usage_report(
         bar = format_usage_bar(s.used_percent, width=20)
         rem_pct = f"{max(0.0, 100.0 - (s.used_percent or 0.0)):.1f}%"
         rem_time = format_usage_time_remaining(s.resets_at_utc, now_utc=effective_now, language=language)
+        is_5h_s = s.window_duration_mins is not None and s.window_duration_mins <= 720
+        is_wk_s = s.window_duration_mins is not None and s.window_duration_mins > 720
+        tag_s_desc = "лимит 5 часов" if is_5h_s else ("недельный лимит" if is_wk_s else "вторичный")
+        tag_s_desc_en = "5-hour limit" if is_5h_s else ("weekly limit" if is_wk_s else "secondary")
 
         if is_ru:
-            lines.append(f"Вторичный лимит ({dur_text}):")
+            lines.append(f"Вторичный лимит ({tag_s_desc}, {dur_text}):")
             lines.append(f"  Использовано:   {bar} (осталось {rem_pct})")
             lines.append(f"  Сброс лимита:   {rem_time} ({_format_local_or_utc(s.resets_at_utc)})")
         else:
-            lines.append(f"Secondary limit window ({dur_text}):")
+            lines.append(f"Secondary limit window ({tag_s_desc_en}, {dur_text}):")
             lines.append(f"  Usage:          {bar} ({rem_pct} remaining)")
             lines.append(f"  Resets:         {rem_time} ({_format_local_or_utc(s.resets_at_utc)})")
 
@@ -1351,7 +1359,11 @@ def show_status_gui(
         if usage is not None and usage.primary is not None:
             p = usage.primary
             dur_text = format_window_duration(p.window_duration_mins, language=lang)
-            lbl_primary_title.config(text=f"{'ОСНОВНОЙ ЛИМИТ' if is_r else 'PRIMARY LIMIT'} ({dur_text})")
+            is_5h = p.window_duration_mins is not None and p.window_duration_mins <= 720
+            is_wk = p.window_duration_mins is not None and p.window_duration_mins > 720
+            tag_ru = "ЛИМИТ 5 ЧАСОВ" if is_5h else ("НЕДЕЛЬНЫЙ ЛИМИТ" if is_wk else "ОСНОВНОЙ ЛИМИТ")
+            tag_en = "5-HOUR LIMIT" if is_5h else ("WEEKLY LIMIT" if is_wk else "PRIMARY LIMIT")
+            lbl_primary_title.config(text=f"{tag_ru if is_r else tag_en} ({dur_text})")
             used = p.used_percent if p.used_percent is not None else 0.0
             rem_pct = max(0.0, 100.0 - used)
             lbl_primary_usage.config(text=f"{used:5.1f}% {'использовано' if is_r else 'used'}  ({rem_pct:5.1f}% {'осталось' if is_r else 'remaining'})")
@@ -1359,7 +1371,9 @@ def show_status_gui(
 
             rem_time = format_usage_time_remaining(p.resets_at_utc, now_utc=now_utc, language=lang)
             resets_local = _format_local_or_utc(p.resets_at_utc)
-            lbl_primary_reset.config(text=f"{'Сброс лимита' if is_r else 'Window resets'}: {rem_time} ({resets_local})")
+            reset_prefix = "Сброс лимита 5ч" if is_5h else ("Сброс недельного лимита" if is_wk else "Сброс лимита")
+            reset_prefix_en = "5-hour limit reset" if is_5h else ("Weekly limit reset" if is_wk else "Window resets")
+            lbl_primary_reset.config(text=f"{reset_prefix if is_r else reset_prefix_en}: {rem_time} ({resets_local})")
         else:
             lbl_primary_usage.config(text="Данные о лимитах недоступны" if is_r else "No rate-limit usage reported")
             prog_primary["value"] = 0
@@ -1370,14 +1384,20 @@ def show_status_gui(
             card_secondary.pack(fill="x", pady=4, after=card_primary)
             s = usage.secondary
             dur_text = format_window_duration(s.window_duration_mins, language=lang)
-            lbl_secondary_title.config(text=f"{'ВТОРИЧНЫЙ ЛИМИТ' if is_r else 'SECONDARY LIMIT'} ({dur_text})")
+            is_5h_s = s.window_duration_mins is not None and s.window_duration_mins <= 720
+            is_wk_s = s.window_duration_mins is not None and s.window_duration_mins > 720
+            tag_s_ru = "ЛИМИТ 5 ЧАСОВ" if is_5h_s else ("НЕДЕЛЬНЫЙ ЛИМИТ" if is_wk_s else "ВТОРИЧНЫЙ ЛИМИТ")
+            tag_s_en = "5-HOUR LIMIT" if is_5h_s else ("WEEKLY LIMIT" if is_wk_s else "SECONDARY LIMIT")
+            lbl_secondary_title.config(text=f"{tag_s_ru if is_r else tag_s_en} ({dur_text})")
             used_s = s.used_percent if s.used_percent is not None else 0.0
             rem_pct_s = max(0.0, 100.0 - used_s)
             lbl_secondary_usage.config(text=f"{used_s:5.1f}% {'использовано' if is_r else 'used'}  ({rem_pct_s:5.1f}% {'осталось' if is_r else 'remaining'})")
             prog_secondary["value"] = min(100.0, max(0.0, used_s))
             rem_time_s = format_usage_time_remaining(s.resets_at_utc, now_utc=now_utc, language=lang)
             resets_local_s = _format_local_or_utc(s.resets_at_utc)
-            lbl_secondary_reset.config(text=f"{'Сброс лимита' if is_r else 'Window resets'}: {rem_time_s} ({resets_local_s})")
+            reset_s_prefix = "Сброс лимита 5ч" if is_5h_s else ("Сброс недельного лимита" if is_wk_s else "Сброс лимита")
+            reset_s_prefix_en = "5-hour limit reset" if is_5h_s else ("Weekly limit reset" if is_wk_s else "Window resets")
+            lbl_secondary_reset.config(text=f"{reset_s_prefix if is_r else reset_s_prefix_en}: {rem_time_s} ({resets_local_s})")
         else:
             card_secondary.pack_forget()
 

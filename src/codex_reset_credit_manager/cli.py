@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -252,10 +253,15 @@ def _observe(
     cmd_override = None
     if codex_binary:
         cmd_override = parse_codex_binary_command(codex_binary)
+    target_home = account_codex_home
+    if target_home is None:
+        user_codex = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).expanduser()
+        if user_codex.is_dir():
+            target_home = user_codex
     return observe_app_server_rate_limits(
         config,
         command_override=cmd_override,
-        codex_home_override=account_codex_home,
+        codex_home_override=target_home,
     )
 
 
