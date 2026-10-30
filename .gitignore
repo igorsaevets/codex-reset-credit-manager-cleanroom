@@ -16,6 +16,7 @@ tmp/
 backup/*/codex_reset_manager-*.py
 backup/*/pre-*.py
 backup/*/*.pre*.py
+backup/*/*.pristine*.py
 backup/*/scan_all.py
 
 # Per-session POST-COMPACT handoff — stale once the next session is launched.
