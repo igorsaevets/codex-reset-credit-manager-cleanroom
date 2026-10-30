@@ -1,57 +1,57 @@
 # NOW — Codex Reseter (state layer)
-Updated: 2026-10-30 (B-01+B-02+B-03+B-05 data-layer + B-10 research DONE; **URGENT**: live reservation 5a818daf is DISARMED, re-enable needed before 11-06; next code task after 11-06)
+Updated: 2026-10-30 (B-01+B-02+B-03+B-05 data-layer + B-10 research+fix DONE; **operator confirmed deliberate pause**; operator Start needed before 11-06; B-04/B-06 wait for post-11-06)
 Single writer: main session
 
-## 🔴 Urgent operational state (observed 2026-10-30T10:36Z)
-- `policy.enabled = False` — system is **PAUSED** since 2026-10-30T09:43:48Z (user-requested).
-- Live reservation `5a818daf-...` is **DISARMED** on disk (`.cancel` marker present at `manifests/reset-credit-20261029-191148Z.json.cancel`; manifest `state: "DISARMED"`, `armed: false`, `execution.result: "DISARMED"`, `terminalAt: 2026-10-30T09:43:34Z`, per-job log shows `event: disarmed, reason: "user-requested"`).
-- If 11-06T23:07:29Z arrives with this state unchanged, the Consume scheduled task will fire but the guard will refuse (`.cancel` + DISARMED) and the credit expiring 2026-11-06T23:24:29Z burns.
-- **Required operator action BEFORE 2026-11-06T23:07:29Z**: click **Start** in the UI (or run `python manager.py sync` after `enable()`). `enable()` → `_clear_block` → `_save_policy` → `_sync_locked` → terminal-reconcile of 5a818daf → fresh enrollment on earliest live credit → new jobId + new Consume task registered + armed. B-10 research confirms the quarantine barrier is currently **False** (all 3 quarantine entries have expiresAt in the past, see below), so re-enrollment is not blocked.
-- Earlier concern "credit will burn automatically" was based on an incorrect unix-timestamp conversion; **retracted** after observing `expiresAt` values are seconds (quarantine[2].expiresAt = 1793300254 = 2026-10-29T18:57:34Z, in the past), not nanoseconds or Nov.
+## 🟡 Operational state (observed 2026-10-30T10:36Z; operator confirmed deliberate)
+- `policy.enabled = False` — **operator-paused** since 2026-10-30T09:43:48Z (confirmed by operator: deliberate pause for the dev session). Live reservation `5a818daf-...` is DISARMED on disk (`.cancel` marker on manifest; `state: "DISARMED"`, `armed: false`).
+- **Required operator action BEFORE 2026-11-06T23:07:29Z**: click **Start** in the UI (or run `python manager.py sync` after `enable()`). `enable()` → `_clear_block` → `_save_policy` → `_sync_locked` → terminal-reconcile of 5a818daf → `_quarantine_barrier` (post-B10b: False since no quarantine matches the earliest live credit) → fresh enrollment on earliest live credit → new jobId + new Consume task registered + armed.
+- The pause provides a safe window: `_sync_locked` early-returns on `if not policy["enabled"]:` before touching the barrier / `_create_child`, so patches deployed now do not perturb live state. B-10b landed in this window.
+- Earlier concern "credit will burn automatically" (based on an incorrect unix-timestamp conversion) was **retracted**; all 3 live quarantine entries have `expiresAt` in the past, barrier returns False.
 
 ## Current state (what runs now)
-Four patches applied to both installed managers under `C:\Users\igors\AppData\Local\CodexResetCredit\runners\`:
+Five patches applied to both installed managers under `C:\Users\igors\AppData\Local\CodexResetCredit\runners\`:
 - v2.6.1 `codex_reset_manager-be2578bf1da55f5e9f8c2aa73d004fee6b08ef950cef383537cbef5fd97bb94d.py` (ManagerSync — scheduled task action)
 - v2.7.4 `codex_reset_manager-fdf1666889c047cee6e3151417e9e7f61c3ad93b83d1498f9c0b8511045be729.py` (UI — `manager-ui-ready.json`)
 
 Patches:
-1. **B-01 (persist cleared block)**: `_save_policy` immediately after `_clear_block` in `_sync_locked`, before `_quarantine_barrier`/`_create_child`. Breaks the 2026-10-22 deadlock cycle (installer no longer sees a stale `blocked` on disk).
-2. **B-02 (preserve on transient)**: `_mutating_operation` has `_TRANSIENT_PROBE_CODES = {TIME_NOT_SYNCHRONIZED, TASK_ENUMERATION_FAILED}` and preserves a single armed one-shot (`len(active)==1`) on those codes — fail-closed intact.
-3. **B-03 (child-install codes + safe diagnostics)**: `_classify_installer_stderr` maps 4 distinct installer-throw classes to `CHILD_ADMISSION_REFUSED` / `CHILD_TIME_UNVERIFIED` / `CHILD_PWSH_FAILED` / `CHILD_TASK_REG_FAILED` (generic fallback `CHILD_INSTALL_FAILED` kept); `create_child` writes raw stderr + stdout tail to `<install_root>\logs\child-install-<UTC>.log`; `_block` preserves `firstCode` across code changes.
-4. **B-05 data layer (coverage-gap observability)**: `policy.blocked.streak` counter (fresh=1, +1 same-code, reset=1 on transition); same-code re-block preserves `atUtc`. `_status_from` exposes `firstCode`, `blockedStreak`, `blockedAgeSeconds` (now - blocked.atUtc), `coverageGap` (bool: blocked AND no armed non-terminal job — NOT via masked `reservation`). `ERROR_MESSAGES` + 5 CHILD_* strings.
+1. **B-01 (persist cleared block)**: `_save_policy` immediately after `_clear_block` in `_sync_locked`, before `_quarantine_barrier`/`_create_child`. Breaks the 2026-10-22 deadlock cycle.
+2. **B-02 (preserve on transient)**: `_mutating_operation` + `_TRANSIENT_PROBE_CODES = {TIME_NOT_SYNCHRONIZED, TASK_ENUMERATION_FAILED}` → preserves a single armed one-shot on those codes.
+3. **B-03 (child-install codes + safe diagnostics)**: 4 distinct `CHILD_*` codes + logs/child-install-*.log + `_block` preserves `firstCode`.
+4. **B-05 data layer**: `policy.blocked.streak`, `firstCode`, `blockedStreak`, `blockedAgeSeconds`, `coverageGap` (bool: blocked AND no armed non-terminal job). ERROR_MESSAGES + 5 CHILD_* strings.
+5. **B-10b (quarantine barrier scope fix)**: `_quarantine_barrier` narrowed to per-credit scope. First pass preserves REAPPEARED / METADATA_CHANGED hard-raises + absentObservedAtUtc timestamping; final boolean checks only whether EARLIEST live credit itself is in an unresolved quarantine. Stops the latent 30-day lockout on next POST_DISPATCH_NOTHING_TO_RESET.
 
-B-10 research (no code change): claim confirmed in all 3 manager versions (be2578 patched / fdf16668 patched / control 026abae). `_quarantine_barrier` is global, not per-credit. Latent-bite scenario: a new `POST_DISPATCH_NOTHING_TO_RESET` after 11-06 locks all enrollments until that quarantine entry's expiresAt. Current live state: all 3 entries past expiresAt → barrier False → no current block. Code fix deferred until post-11-06.
-
-All verified by scripted repros under `backup/2026-10-30-B0{1,2,3,5}-*\` and `backup/2026-10-30-B10-quarantine-scope-research\` — each PASSes on both patched files; B-01..B-05 FAIL on control `026abae` as expected; B-10 PASSes on all (pre-existing bug). Repo pytest 64/64 after every change. Branch main HEAD `be82731` (pushed), all fixes live in `%LOCALAPPDATA%\CodexResetCredit`.
+All verified by scripted repros under `backup/2026-10-30-B0{1,2,3,5}-*\` and `backup/2026-10-30-B10b-quarantine-scope-fix\` — each PASSes on both patched files; B-01..B-05 FAIL on control `026abae` as expected; B-10b PASSes on patched + fails on control in 3 groups matching the semantic delta; frozen research `backup/2026-10-30-B10-quarantine-scope-research/repro_b10.py` now has 2 FAILs on patched by design. Repo pytest 64/64 after every change. Branch main HEAD will be published this round as the next commit.
 
 Current live reservation: `jobId 5a818daf-2ee6-4c2b-bbe8-bd52f68d5b2d`, `expiresAtUtc 2026-11-06T23:24:29Z`, `triggerAtUtc 2026-11-06T23:07:29Z`, **DISARMED**. External risks not fixed by code (user action required): operator Start before 11-06; `powercfg SUB_SLEEP RTCWAKE DC=0` → on-battery wake fails during dispatch; `notifications.delivered: true` for `paused` key observed today → the toast channel is **working** (contradicts earlier assumption of dead channel; B-12 scope on notifications narrows accordingly).
 
 ## Next action (one task per prompt)
-Recommended trigger: **(none — hold until Igor re-enables and 11-06 dispatch completes)**. If Igor wants progress before 11-06, lowest-risk candidate: **B-05 escalation jsonl-only path** (no live-install mutation beyond already-live patches, no toast dependency).
+Candidates while paused (operator safely blocked on `if not policy["enabled"]:` before any barrier/enrollment):
+- **B-05 escalation** (jsonl-only OR toast — toast channel is confirmed working for the `paused` key, see below). Builds on existing data layer. Low risk.
+- **B-07 env hardening** — resolve `pwsh` absolute path at install, `w32time` triggerinfo. Self-contained but touches shared service state.
+- **B-12 subset** — orthogonal quarantine purge (`policy["quarantine"]` grows unboundedly; expired entries no longer block but still accumulate). Small, confined to `_sync_locked` or a dedicated maintenance call. Lowest risk.
 
-Alternative lower-risk candidates:
-- **B-07 env hardening** — self-contained; touches `w32time` + resolves `pwsh` absolute path. Risk: w32time is a shared service. Benefit: closes the TIME_NOT_SYNCHRONIZED re-entry.
-- **B-11 nothingToReset spend semantics** — ❌ **FORBIDDEN** before 11-06 (requires a live reset-run).
-
-Post-11-06 priority order: **B-04** (truthful disarm reason) → **B-06** (manager hash pin + ManagerSync re-register) → **B-10 fix** (narrow barrier scope + optional quarantine purge).
+Post-2026-11-06 (needed for live-task touches):
+- **B-04** truthful disarm reason — removes the hardcoded `"user-requested"` lie in guard-ffe58504, which blocked diagnosis of the exact pause-origin ambiguity we just hit.
+- **B-06** manager hash pin + ManagerSync re-register — closes the admission-check gap on manager content.
+- **B-11** `nothingToReset` spend semantics — ❌ **FORBIDDEN** before 11-06 (requires a live reset-run).
 
 ## Deferred until after 2026-11-06 23:24:29Z dispatch
 - **B-04** truthful disarm reason — touches guard-ffe58504 (live Consume task owner).
 - **B-06** manager hash pin + ManagerSync re-register — rewrites live task XML.
-- **B-10 code fix** — barrier scope + quarantine purge in `_sync_locked` enrollment path.
-- Both B-04 and B-06 safe post-2026-11-07. Current post-B05 hashes in `backup/2026-10-30-B05-coverage-assertion/post-b05.sha256.txt`.
+- Both safe post-2026-11-07. Current post-B10b hashes in `backup/2026-10-30-B10b-quarantine-scope-fix/post-b10b.sha256.txt`.
 
 ## Files edited this session (re-Read before Edit)
-- `D:\Gemini Projects\Codex Reseter\docs\backlog.md` — B-05 narrowed; B-10 narrowed
-- `D:\Gemini Projects\Codex Reseter\docs\backlog-done.md` — B-01..B-03 + B-05 data layer + B-10 research
+- `D:\Gemini Projects\Codex Reseter\docs\backlog.md` — B-05 narrowed; B-10 moved to DONE; B-12 extended with quarantine purge
+- `D:\Gemini Projects\Codex Reseter\docs\backlog-done.md` — B-01..B-03 + B-05 data layer + B-10 research + B-10b code fix
 - `D:\Gemini Projects\Codex Reseter\NOW.md` — this file
 - `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B01-clearblock-save\`
 - `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B02-preserve-transient\`
 - `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B03-distinct-child-codes\`
 - `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B05-coverage-assertion\`
-- `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B10-quarantine-scope-research\` — repro_b10.py (research only; no manager snapshots, no SHA records needed)
-- `C:\Users\igors\AppData\Local\CodexResetCredit\runners\codex_reset_manager-be2578bf…py` — B-01+B-02+B-03+B-05
-- `C:\Users\igors\AppData\Local\CodexResetCredit\runners\codex_reset_manager-fdf1666889c0…py` — same four fixes
+- `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B10-quarantine-scope-research\` — repro_b10.py (frozen pre-fix artifact)
+- `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B10b-quarantine-scope-fix\` — `be2578.pre-b10b.py`, `fdf16668.pre-b10b.py`, `pre-b10b.sha256.txt`, `post-b10b.sha256.txt`, `repro_b10b.py`
+- `C:\Users\igors\AppData\Local\CodexResetCredit\runners\codex_reset_manager-be2578bf…py` — B-01+B-02+B-03+B-05+B-10b
+- `C:\Users\igors\AppData\Local\CodexResetCredit\runners\codex_reset_manager-fdf1666889c0…py` — same five fixes
 - `D:\Gemini Projects\Codex Reseter\.gitignore` — excludes `backup/*/*.pre*.py`, `backup/*/pre-*.py`, `backup/*/codex_reset_manager-*.py`, `backup/*/scan_all.py`, `POST-COMPACT-PROMPT.md`
 
 ## Hashes (for recovery if a copy drifts)
@@ -61,6 +61,8 @@ Post-11-06 priority order: **B-04** (truthful disarm reason) → **B-06** (manag
 - Post-B03 → `backup/2026-10-30-B03-distinct-child-codes/post-b03.sha256.txt` (be2578: `6358802d…`; fdf16668: `1da142ea…`)
 - Pre-B05 → identical to post-B03 (confirms no drift)
 - Post-B05 → `backup/2026-10-30-B05-coverage-assertion/post-b05.sha256.txt` (be2578: `e8c9fbd0…`; fdf16668: `73890834…`)
+- Pre-B10b → `backup/2026-10-30-B10b-quarantine-scope-fix/pre-b10b.sha256.txt` (identical to post-B05)
+- Post-B10b → `backup/2026-10-30-B10b-quarantine-scope-fix/post-b10b.sha256.txt` (be2578: `ef10662d…`; fdf16668: `751bb1ab…`)
 - Guard runtime (pinned, UNCHANGED): `codex_reset_guard-ffe58504…py` — SHA matches filename
 - Installer (pinned, UNCHANGED): `install-7816d620…ps1` — SHA matches filename
 
@@ -76,6 +78,5 @@ Post-11-06 priority order: **B-04** (truthful disarm reason) → **B-06** (manag
 - B-06 P1 pin (deferred until after 11-06) → docs/backlog.md
 - B-07 P2 env (anytime, low-risk) → docs/backlog.md
 - B-08..B-09 self-check popup → docs/backlog.md
-- B-10 code fix (deferred until after 11-06) → docs/backlog.md
 - B-11 instrumented reset probe (**FORBIDDEN before 11-06**) → docs/backlog.md
-- B-12 hygiene → docs/backlog.md
+- B-12 hygiene (now includes quarantine purge from B-10b) → docs/backlog.md
