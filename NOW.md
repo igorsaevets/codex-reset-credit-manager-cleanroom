@@ -1,6 +1,13 @@
 # NOW — Codex Reseter (state layer)
-Updated: 2026-10-30 (B-01+B-02+B-03+B-05 data-layer DONE; B-05 escalation residual OR B-07 env recommended next; B-04/B-06 after 11-06)
+Updated: 2026-10-30 (B-01+B-02+B-03+B-05 data-layer + B-10 research DONE; **URGENT**: live reservation 5a818daf is DISARMED, re-enable needed before 11-06; next code task after 11-06)
 Single writer: main session
+
+## 🔴 Urgent operational state (observed 2026-10-30T10:36Z)
+- `policy.enabled = False` — system is **PAUSED** since 2026-10-30T09:43:48Z (user-requested).
+- Live reservation `5a818daf-...` is **DISARMED** on disk (`.cancel` marker present at `manifests/reset-credit-20261029-191148Z.json.cancel`; manifest `state: "DISARMED"`, `armed: false`, `execution.result: "DISARMED"`, `terminalAt: 2026-10-30T09:43:34Z`, per-job log shows `event: disarmed, reason: "user-requested"`).
+- If 11-06T23:07:29Z arrives with this state unchanged, the Consume scheduled task will fire but the guard will refuse (`.cancel` + DISARMED) and the credit expiring 2026-11-06T23:24:29Z burns.
+- **Required operator action BEFORE 2026-11-06T23:07:29Z**: click **Start** in the UI (or run `python manager.py sync` after `enable()`). `enable()` → `_clear_block` → `_save_policy` → `_sync_locked` → terminal-reconcile of 5a818daf → fresh enrollment on earliest live credit → new jobId + new Consume task registered + armed. B-10 research confirms the quarantine barrier is currently **False** (all 3 quarantine entries have expiresAt in the past, see below), so re-enrollment is not blocked.
+- Earlier concern "credit will burn automatically" was based on an incorrect unix-timestamp conversion; **retracted** after observing `expiresAt` values are seconds (quarantine[2].expiresAt = 1793300254 = 2026-10-29T18:57:34Z, in the past), not nanoseconds or Nov.
 
 ## Current state (what runs now)
 Four patches applied to both installed managers under `C:\Users\igors\AppData\Local\CodexResetCredit\runners\`:
@@ -9,60 +16,59 @@ Four patches applied to both installed managers under `C:\Users\igors\AppData\Lo
 
 Patches:
 1. **B-01 (persist cleared block)**: `_save_policy` immediately after `_clear_block` in `_sync_locked`, before `_quarantine_barrier`/`_create_child`. Breaks the 2026-10-22 deadlock cycle (installer no longer sees a stale `blocked` on disk).
-2. **B-02 (preserve on transient)**: `_mutating_operation` has `_TRANSIENT_PROBE_CODES = {TIME_NOT_SYNCHRONIZED, TASK_ENUMERATION_FAILED}` and preserves a single armed one-shot (`len(active)==1`) on those codes — fail-closed intact (`_block+_save_policy` still writes the block, only the already-pinned armed job survives).
-3. **B-03 (child-install codes + safe diagnostics)**: `_classify_installer_stderr` maps 4 distinct installer-throw classes to `CHILD_ADMISSION_REFUSED` / `CHILD_TIME_UNVERIFIED` / `CHILD_PWSH_FAILED` / `CHILD_TASK_REG_FAILED` (generic fallback `CHILD_INSTALL_FAILED` kept); `create_child` writes raw stderr + stdout tail to `<install_root>\logs\child-install-<UTC>.log`; `_block` preserves `firstCode` across code changes; `_validate_policy` and `_log` accept the new field.
-4. **B-05 data layer (coverage-gap observability)**: `_block` tracks `streak` on `policy.blocked` (fresh=1, +1 on same-code re-block, reset to 1 on code transition; same-code re-block PRESERVES original `atUtc` so `blockedAgeSeconds` measures age of the problem, not age of last probe). `_status_from` exposes four new fields: `firstCode`, `blockedStreak`, `blockedAgeSeconds` (now - blocked.atUtc, computed), `coverageGap` (bool: blocked AND (no job OR terminal OR not armed) — NOT via the derived `reservation` string which gets masked to "attention" by the block itself). `_validate_policy` and `_log` whitelist `streak`. `ERROR_MESSAGES` extended with human strings for all five child-install codes.
+2. **B-02 (preserve on transient)**: `_mutating_operation` has `_TRANSIENT_PROBE_CODES = {TIME_NOT_SYNCHRONIZED, TASK_ENUMERATION_FAILED}` and preserves a single armed one-shot (`len(active)==1`) on those codes — fail-closed intact.
+3. **B-03 (child-install codes + safe diagnostics)**: `_classify_installer_stderr` maps 4 distinct installer-throw classes to `CHILD_ADMISSION_REFUSED` / `CHILD_TIME_UNVERIFIED` / `CHILD_PWSH_FAILED` / `CHILD_TASK_REG_FAILED` (generic fallback `CHILD_INSTALL_FAILED` kept); `create_child` writes raw stderr + stdout tail to `<install_root>\logs\child-install-<UTC>.log`; `_block` preserves `firstCode` across code changes.
+4. **B-05 data layer (coverage-gap observability)**: `policy.blocked.streak` counter (fresh=1, +1 same-code, reset=1 on transition); same-code re-block preserves `atUtc`. `_status_from` exposes `firstCode`, `blockedStreak`, `blockedAgeSeconds` (now - blocked.atUtc), `coverageGap` (bool: blocked AND no armed non-terminal job — NOT via masked `reservation`). `ERROR_MESSAGES` + 5 CHILD_* strings.
 
-All four verified by scripted repros under `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B0{1,2,3,5}-*\` — each PASSes on both patched files and FAILs on unpatched control `026abae` (B-03 raises AttributeError; others fail with explicit diagnostic). Full repo pytest 64/64 after each patch (run four times in sequence). Branch main, HEAD 876da44, repo code untouched; all fixes live in `%LOCALAPPDATA%\CodexResetCredit`.
+B-10 research (no code change): claim confirmed in all 3 manager versions (be2578 patched / fdf16668 patched / control 026abae). `_quarantine_barrier` is global, not per-credit. Latent-bite scenario: a new `POST_DISPATCH_NOTHING_TO_RESET` after 11-06 locks all enrollments until that quarantine entry's expiresAt. Current live state: all 3 entries past expiresAt → barrier False → no current block. Code fix deferred until post-11-06.
 
-Current live reservation: `jobId 5a818daf-2ee6-4c2b-bbe8-bd52f68d5b2d`, `expiresAtUtc 2026-11-06T23:24:29Z`, `triggerAtUtc 23:07:29Z` ≈ 16:07 PT. External risks NOT fixed by code (user action required): `powercfg SUB_SLEEP RTCWAKE DC=0` → on battery laptop cannot wake into the 5-min dispatch window; `notifications.delivered: false` → the toast channel is dead so any future popup system needs its own delivery verification.
+All verified by scripted repros under `backup/2026-10-30-B0{1,2,3,5}-*\` and `backup/2026-10-30-B10-quarantine-scope-research\` — each PASSes on both patched files; B-01..B-05 FAIL on control `026abae` as expected; B-10 PASSes on all (pre-existing bug). Repo pytest 64/64 after every change. Branch main HEAD `be82731` (pushed), all fixes live in `%LOCALAPPDATA%\CodexResetCredit`.
+
+Current live reservation: `jobId 5a818daf-2ee6-4c2b-bbe8-bd52f68d5b2d`, `expiresAtUtc 2026-11-06T23:24:29Z`, `triggerAtUtc 2026-11-06T23:07:29Z`, **DISARMED**. External risks not fixed by code (user action required): operator Start before 11-06; `powercfg SUB_SLEEP RTCWAKE DC=0` → on-battery wake fails during dispatch; `notifications.delivered: true` for `paused` key observed today → the toast channel is **working** (contradicts earlier assumption of dead channel; B-12 scope on notifications narrows accordingly).
 
 ## Next action (one task per prompt)
-Recommended trigger: `Начни B-05 escalation` (continuation of B-05 — the data layer is in, now wire the attention logic + re-notification)
-Alternative trigger: `Начни B-07` (environment: w32tm trigger-start + pwsh absolute path at install — self-contained)
-Context: `D:\Gemini Projects\Codex Reseter\docs\backlog.md`
+Recommended trigger: **(none — hold until Igor re-enables and 11-06 dispatch completes)**. If Igor wants progress before 11-06, lowest-risk candidate: **B-05 escalation jsonl-only path** (no live-install mutation beyond already-live patches, no toast dependency).
 
-What to change (if B-05 escalation):
-- `doctor`: when `coverageGap=true` AND `freeResetExpiresAtUtc` is within N days (propose 2) → return `ATTENTION` regardless of `blocked_code` being set already (today it's blocked anyway; the point is explicit `coverageGap:true` field in the JSON so operators and future diagnostics see the dedicated signal).
-- Re-notify logic in `_block`: today `_notify_once(f"block:{code}")` deduplicates per-code so 538 same-code reblocks produce ONE toast. New rule: ALSO re-notify when `streak>=2` AND age-since-last-notify > 2h, under a SEPARATE key `f"block:{code}:streak"` so dedup doesn't swallow it. CAVEAT: `notifications.json delivered:false` — build this ONLY after B-12 roots-causes the delivery channel; otherwise the re-notify fires into the void. Alternative: just WRITE the escalation event to `manager.jsonl` without touching toasts.
-- Primary button Pause→Start/Repair when `blocked && enabled`: EXPLICITLY out of scope (UI widget, lives with B-08/B-09).
-- N-days window: hardcode N=2 as a module constant, NOT a policy field (keep policy schema stable; constant can be tuned without a schema bump).
+Alternative lower-risk candidates:
+- **B-07 env hardening** — self-contained; touches `w32time` + resolves `pwsh` absolute path. Risk: w32time is a shared service. Benefit: closes the TIME_NOT_SYNCHRONIZED re-entry.
+- **B-11 nothingToReset spend semantics** — ❌ **FORBIDDEN** before 11-06 (requires a live reset-run).
 
-Expected outcome: `doctor` prints `coverageGap=true blockedStreak=538 blockedAgeSeconds=~1.1M firstCode=TIME_NOT_SYNCHRONIZED` as it already does post-B-05, AND operator sees a renewed toast / log entry when streak crosses 2 or age crosses 7200s.
-
-Problem (independent thought): the data layer is in but the system still won't REACT without the escalation wiring. Current `_block` writes a toast exactly once per code transition. Under a 10-22-style loop (538 same-code), after the first toast the system is silent. The right trigger for re-notification is "something is still wrong and nothing has moved" — i.e. `streak>=2 AND age-since-last-notify>N`. Secondarily, if `notifications.delivered` is lying (B-12 open question), the toast path is a mirage. A manager.jsonl `escalation` event is cheaper, auditable, and doesn't depend on the toast channel. Consider doing that FIRST (free, no risk), and the toast re-notify only after B-12 confirms delivery works.
+Post-11-06 priority order: **B-04** (truthful disarm reason) → **B-06** (manager hash pin + ManagerSync re-register) → **B-10 fix** (narrow barrier scope + optional quarantine purge).
 
 ## Deferred until after 2026-11-06 23:24:29Z dispatch
-- **B-04** (truthful disarm reason) — touches guard-ffe58504 which owns the live Consume task; interface change on a running binary risks the 11-06 dispatch.
-- **B-06** (manager hash pin + ManagerSync re-register) — requires rewriting ManagerSync task XML; any mistake breaks the next sync. Current post-B05 hashes recorded in `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B05-coverage-assertion\post-b05.sha256.txt`.
-- Both are safe to run on 2026-11-07 or later.
+- **B-04** truthful disarm reason — touches guard-ffe58504 (live Consume task owner).
+- **B-06** manager hash pin + ManagerSync re-register — rewrites live task XML.
+- **B-10 code fix** — barrier scope + quarantine purge in `_sync_locked` enrollment path.
+- Both B-04 and B-06 safe post-2026-11-07. Current post-B05 hashes in `backup/2026-10-30-B05-coverage-assertion/post-b05.sha256.txt`.
 
 ## Files edited this session (re-Read before Edit)
-- `D:\Gemini Projects\Codex Reseter\docs\backlog.md` — B-01, B-02, B-03 rows removed; B-05 narrowed to escalation residual
-- `D:\Gemini Projects\Codex Reseter\docs\backlog-done.md` — B-01, B-02, B-03, B-05 data-layer entries with dates + results
+- `D:\Gemini Projects\Codex Reseter\docs\backlog.md` — B-05 narrowed; B-10 narrowed
+- `D:\Gemini Projects\Codex Reseter\docs\backlog-done.md` — B-01..B-03 + B-05 data layer + B-10 research
 - `D:\Gemini Projects\Codex Reseter\NOW.md` — this file
-- `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B01-clearblock-save\` — pre-fix copies + .sha256 + `repro_b01.py` + `scan_all.py`
-- `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B02-preserve-transient\` — pre-fix copies + .sha256 + `post-b02.sha256.txt` + `repro_b02.py`
-- `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B03-distinct-child-codes\` — pre-fix copies + `pre-b03.sha256.txt` + `post-b03.sha256.txt` + `repro_b03.py`
-- `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B05-coverage-assertion\` — pre-fix copies (`be2578.pre-b05.py`, `fdf16668.pre-b05.py`) + `pre-b05.sha256.txt` + `post-b05.sha256.txt` + `repro_b05.py`
-- `C:\Users\igors\AppData\Local\CodexResetCredit\runners\codex_reset_manager-be2578bf1da55f5e9f8c2aa73d004fee6b08ef950cef383537cbef5fd97bb94d.py` — B-01 + B-02 + B-03 + B-05
-- `C:\Users\igors\AppData\Local\CodexResetCredit\runners\codex_reset_manager-fdf1666889c047cee6e3151417e9e7f61c3ad93b83d1498f9c0b8511045be729.py` — same four fixes
-- `D:\Gemini Projects\Codex Reseter\POST-COMPACT-PROMPT.md` — ready-to-paste prompt for the next session after `/compact`
+- `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B01-clearblock-save\`
+- `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B02-preserve-transient\`
+- `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B03-distinct-child-codes\`
+- `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B05-coverage-assertion\`
+- `D:\Gemini Projects\Codex Reseter\backup\2026-10-30-B10-quarantine-scope-research\` — repro_b10.py (research only; no manager snapshots, no SHA records needed)
+- `C:\Users\igors\AppData\Local\CodexResetCredit\runners\codex_reset_manager-be2578bf…py` — B-01+B-02+B-03+B-05
+- `C:\Users\igors\AppData\Local\CodexResetCredit\runners\codex_reset_manager-fdf1666889c0…py` — same four fixes
+- `D:\Gemini Projects\Codex Reseter\.gitignore` — excludes `backup/*/*.pre*.py`, `backup/*/pre-*.py`, `backup/*/codex_reset_manager-*.py`, `backup/*/scan_all.py`, `POST-COMPACT-PROMPT.md`
 
 ## Hashes (for recovery if a copy drifts)
-- Pre-B01 recorded in `backup/2026-10-30-B01-clearblock-save/*.sha256` (be2578: `bba850f3...`; fdf16668: `fdf16668...` matches filename, pristine)
-- Pre-B02 → `backup/2026-10-30-B02-preserve-transient/pre-*.sha256` (be2578: `3c59b1b8...`; fdf16668: `74ded99d...`)
-- Pre-B03 → `backup/2026-10-30-B03-distinct-child-codes/pre-b03.sha256.txt` (be2578: `e1213b45...`; fdf16668: `1ab061f6...`)
-- Post-B03 → `backup/2026-10-30-B03-distinct-child-codes/post-b03.sha256.txt` (be2578: `6358802d...`; fdf16668: `1da142ea...`)
-- Pre-B05 → `backup/2026-10-30-B05-coverage-assertion/pre-b05.sha256.txt` (be2578: `6358802d...`; fdf16668: `1da142ea...` — identical to post-B03, confirms no drift)
-- Post-B05 → `backup/2026-10-30-B05-coverage-assertion/post-b05.sha256.txt` (be2578: `e8c9fbd0...`; fdf16668: `73890834...`)
-- Guard runtime (pinned, UNCHANGED): `codex_reset_guard-ffe58504b28e552e9fdde359555ad16a94b5b184c39dd559ce25d2a6a60243fa.py` — SHA matches filename
-- Installer (pinned, UNCHANGED): `install-7816d620e47a73d81aefbeead05dbe2810475737318c00930a504a57be4ae7dd.ps1` — SHA matches filename
+- Pre-B01 → `backup/2026-10-30-B01-clearblock-save/*.sha256` (be2578: `bba850f3…`; fdf16668: `fdf16668…` pristine)
+- Pre-B02 → `backup/2026-10-30-B02-preserve-transient/pre-*.sha256` (be2578: `3c59b1b8…`; fdf16668: `74ded99d…`)
+- Pre-B03 → `backup/2026-10-30-B03-distinct-child-codes/pre-b03.sha256.txt` (be2578: `e1213b45…`; fdf16668: `1ab061f6…`)
+- Post-B03 → `backup/2026-10-30-B03-distinct-child-codes/post-b03.sha256.txt` (be2578: `6358802d…`; fdf16668: `1da142ea…`)
+- Pre-B05 → identical to post-B03 (confirms no drift)
+- Post-B05 → `backup/2026-10-30-B05-coverage-assertion/post-b05.sha256.txt` (be2578: `e8c9fbd0…`; fdf16668: `73890834…`)
+- Guard runtime (pinned, UNCHANGED): `codex_reset_guard-ffe58504…py` — SHA matches filename
+- Installer (pinned, UNCHANGED): `install-7816d620…ps1` — SHA matches filename
 
 ## Open decisions
 - Gray bypasses (auto-enable, SYSTEM UI, stored-password task) remain rejected.
-- `powercfg RTCWAKE DC=1` left as user-decision: being on AC in 16:00-16:30 PT on 2026-11-06, OR `powercfg /setdcvalueindex SCHEME_BALANCED SUB_SLEEP RTCWAKE 1 && powercfg /S SCHEME_BALANCED` (shared-system setting).
-- B-05 escalation re-notify path: toast (depends on B-12 delivery fix) vs. jsonl-only escalation event (free, immediate). Lean jsonl-first.
+- `powercfg RTCWAKE DC=1` left as user-decision for the 11-06 window.
+- Toast channel is confirmed WORKING for the `paused` key (`notifications.json delivered:true` observed today); B-12 "notifications.delivered root-cause" narrows to "verify delivery per-key over longer window", not "channel is broken".
+- B-05 escalation re-notify path: previously assumed toast-dependent; with channel confirmed working, both toast and jsonl-only paths are viable.
 
 ## Open backlog (pointers only)
 - B-04 P0 (deferred until after 11-06) → docs/backlog.md
@@ -70,4 +76,6 @@ Problem (independent thought): the data layer is in but the system still won't R
 - B-06 P1 pin (deferred until after 11-06) → docs/backlog.md
 - B-07 P2 env (anytime, low-risk) → docs/backlog.md
 - B-08..B-09 self-check popup → docs/backlog.md
-- B-10..B-12 verify-before-build → docs/backlog.md
+- B-10 code fix (deferred until after 11-06) → docs/backlog.md
+- B-11 instrumented reset probe (**FORBIDDEN before 11-06**) → docs/backlog.md
+- B-12 hygiene → docs/backlog.md
