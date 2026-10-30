@@ -1,0 +1,2 @@
+\6358802d0f2c0632476041a98e5b5afcdd098d2118dae2d6fb9223cf9e142925 *C:\\Users\\igors\\AppData\\Local\\CodexResetCredit\\runners\\codex_reset_manager-be2578bf1da55f5e9f8c2aa73d004fee6b08ef950cef383537cbef5fd97bb94d.py
+\1da142ea646673ab845e28f126fbb4a92c5e16b63b1ae3e82a1fe5a0947b3537 *C:\\Users\\igors\\AppData\\Local\\CodexResetCredit\\runners\\codex_reset_manager-fdf1666889c047cee6e3151417e9e7f61c3ad93b83d1498f9c0b8511045be729.py
