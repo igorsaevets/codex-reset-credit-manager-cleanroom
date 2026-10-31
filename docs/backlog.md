@@ -29,6 +29,10 @@ Process: when a task is done, move its row to `docs/backlog-done.md` with date +
 - [ ] **B-11 `nothingToReset` spend semantics.** Instrumented run: does `consume→nothingToReset` burn the banked credit? Log rate-limit state before/after. Decision gates B-09 wording. Acceptance: yes/no with log evidence.
 - [ ] **B-12 Hygiene.** Purge stale `.cancel` on `enable()` + `cancel_file_exists` in `doctor`; purge past-expiry quarantine entries from `policy["quarantine"]` once `absentObservedAtUtc` is set AND `now() >= expiresAt` (prevents unbounded growth; orthogonal cleanup from B-10b); add `entryPoint` to mutating `manager.jsonl` events; **narrow** `notifications.json delivered:false` root-cause (channel confirmed working for `paused` key 2026-10-30 → not fully dead; verify per-key delivery over longer window); audit 16 runner copies in install root. Acceptance: each item closed with one line.
 
+## Done this round (now in docs/backlog-done.md)
+
+- [x] B-03 Linux twin — shipped as v2.7.6 (2026-10-30). The former "Linux twin for B-03 — v2.7.6 candidate" pointer is CLOSED.
+
 ## Out of scope (rejected)
 
 - Blind auto-`enable()`/auto-clear of `blocked` outside controller lock; installer ignoring `blocked`; `SYSTEM+CreateProcessAsUser` UI bypass; stored-password task; `nssm` loop. Reasons: break fail-closed, credential/session risk, ToS/account-policy risk.

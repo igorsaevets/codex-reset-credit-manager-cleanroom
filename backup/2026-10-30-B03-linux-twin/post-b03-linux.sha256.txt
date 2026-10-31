@@ -1,0 +1,8 @@
+# Post-B03-Linux-twin (v2.7.6) SHA256 records
+
+## OneDrive source (what will be committed on main)
+disk form (CRLF-normalized):
+70248853bb7951eab23dfaa4a8c2de392b2636d540e753a2b8b2f061fdbface2 *codex_reset_manager.py
+
+## Also-touched file (test unlock):
+533552b2098ad1642c5a19fce7fcbd61f458bde0ee9cf7f65227dd421cb22402 *tests/test_manager_console.py
