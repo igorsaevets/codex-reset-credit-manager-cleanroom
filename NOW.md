@@ -6,11 +6,21 @@ Single writer: main session
 
 ### v2.7.6 (just landed 2026-10-30, post-compact)
 - Commit `3c5fbca` on `main` (fast-forward from `be3e849`), tag `v2.7.6` pushed.
-- GitHub Releases page entry **NOT YET CREATED** — `gh release create` was blocked by Claude Code auto-mode classifier ("Create Public Surface"). Operator needs to approve or create it manually. Code + tag are public.
+- GitHub Releases page: the first `gh release create` was blocked by the Claude Code auto-mode classifier ("Create Public Surface"). Operator then approved publication on condition of a full re-verification first — done, see «Re-verification before release» below.
 - Change: Linux twin for B-03. New `_LINUX_INSTALLER_SIGNATURES` + `_classify_linux_installer_stderr` at module scope; `LinuxServices.create_child` now classifies `install_linux.py` stderr into the 4 CHILD_* codes and writes `logs/child-install-*.log` via the inherited `_record_child_install_failure`. `ERROR_MESSAGES[CHILD_PWSH_FAILED]` reworded to platform-neutral ("could not start its native runtime"). APP_VERSION 2.7.5 → 2.7.6; `tests/test_manager_console.py:102` updated from stale "2.7.4" assert to "2.7.6".
 - Pre-SHA256 of `codex_reset_manager.py` (disk form, CRLF): `2bdb56064dd3028ef6f84ba979429795e5fc35084ff44e13b013d7313aac31a7`
 - Post-SHA256 of `codex_reset_manager.py` (disk form, CRLF): `70248853bb7951eab23dfaa4a8c2de392b2636d540e753a2b8b2f061fdbface2`
-- Verified: upstream `pytest tests/` 315 passed (3 pre-existing failures all `OSError:[Errno 22]` from pathlib on the Cyrillic path `C:\Users\igors\OneDrive\Документы\...`); new Linux repro PASS; all 5 prior B-NN repros still PASS.
+- First-pass verification: OneDrive working copy `pytest tests/` 315 passed + 3 failed; Linux repro PASS; all 5 prior B-NN repros still PASS. **Correction:** the first pass blamed the 3 failures on the Cyrillic path — wrong. They are OneDrive cloud-only placeholders that do not hydrate (`setup.cmd`, `setup-linux.sh`, `docs\images\social-preview.svg`: attributes `0x401620` = RECALL_ON_DATA_ACCESS|OFFLINE|REPARSE_POINT|SPARSE; a Python read gives `OSError [Errno 22]`), while `README.ko.md` in the same Cyrillic folder reads fine; a fresh clone outside OneDrive passes 318 of 318.
+- LF-blob SHA-256 of the v2.7.6 manager (what a Linux clone gets): `e5ceaedcea534dc7c2d12fb4086f5973af9a8ece9b8390f2d3ad3c48fb6b61db`. Disk SHAs above are the CRLF form (`core.autocrlf=true`; disk with CR stripped == blob, verified).
+
+#### Re-verification before release (2026-10-31 UTC, operator-requested)
+- Tag `v2.7.6` (object `1e69fcc`) → commit `3c5fbca` locally and on GitHub; manager blob `29a71612…` identical locally, via the GitHub API and in a fresh clone.
+- Fresh clone of the tag at `D:\AI_Scratch\codex-reseter\v276-probe\repo`, Windows Python 3.14.4: `pytest tests/` 318 passed, 3 skipped, 0 failed.
+- Docker `python:3.12-slim` as uid 1000 (Docker Desktop WSL2 VM): repro PASS, provenance PASS. Upstream suite under `unittest`: v2.7.5 = 3 failures + 19 errors, v2.7.6 = 2 + 19; the only difference is the version test fixed here. The 21 shared problems are Windows-only tests not skipped on Linux (`SYSTEMROOT`, `CREATE_NO_WINDOW`, `codex.exe`, UI) plus the guard's WSL check firing inside the WSL2 VM — pre-existing.
+- Repro group 6 drives the real `LinuxServices.create_child` (mocked `subprocess.run`, 8 outcomes + a pre-flight rejection): PASS on v2.7.6; the v2.7.5 control fails exactly on the 6 post-spawn outcomes (generic code, no log). Group 1 checked only the classifier — the method itself had not been exercised before (ledger E-215).
+- `verify_signatures_v276.py` (AST of `install_linux.py`): all 55 Linux signatures occur in real `InstallError` messages, none matches two buckets; 59 of 133 distinct messages get a specific code (ADMISSION 22, TASK_REG 22, PWSH 14, TIME 1), 74 fall back to `CHILD_INSTALL_FAILED` but are logged. Windows table: 38 of 38 verbatim in repo `install.ps1` and in the installed `install-7816d620…ps1`. Full mapping: `backup\2026-10-30-B03-linux-twin\coverage-v2.7.6.txt`.
+- Controller `_create_child` runs `_cleanup_failed_linux_child` for ANY `ManagerError`, so the new codes do not change cleanup; the guard has no `CHILD_*` branching.
+- Count errata: the classifier group has 25 cases (22 classified + 3 fallback) and the Windows group 5 — commit messages `3c5fbca` / `d5ca593` say 23 / 2 and blame the Cyrillic path. Both wrong; pushed history left as is.
 
 ### v2.7.5 (earlier same day)
 - URL: https://github.com/igorsaevets/codex-usage-limit-auto-reset/releases/tag/v2.7.5

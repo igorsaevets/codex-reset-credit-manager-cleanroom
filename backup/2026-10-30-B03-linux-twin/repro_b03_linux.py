@@ -13,6 +13,15 @@ What is proved:
 4. ERROR_MESSAGES[CHILD_PWSH_FAILED] is platform-neutral (does not literally
    say 'PowerShell'), so the Linux twin can reuse the same code symbol
    without a misleading end-user message.
+5. APP_VERSION is 2.7.6.
+6. The real LinuxServices.create_child (subprocess.run mocked) maps each
+   outcome to its code and writes exactly one logs/child-install-*.log for
+   every failure after spawn (classified, unclassified, timeout, OSError),
+   while the success path, the bad-output path and pre-flight rejections
+   are unchanged and write no log.
+
+Signature provenance against the real install_linux.py lives in
+verify_signatures_v276.py next to this file.
 """
 from __future__ import annotations
 
@@ -92,6 +101,8 @@ def test_linux_classifier_distinct_codes(mod) -> list[str]:
         ("something unrelated about disks", "CHILD_INSTALL_FAILED"),
         ("Permission denied", "CHILD_INSTALL_FAILED"),
     ]
+    if not hasattr(mod, "_classify_linux_installer_stderr"):
+        return ["  _classify_linux_installer_stderr missing - cannot classify"]
     failures: list[str] = []
     for stderr, expected in cases:
         got = mod._classify_linux_installer_stderr(stderr)
@@ -141,6 +152,110 @@ def test_app_version_bumped(mod) -> list[str]:
     return failures
 
 
+def test_linux_create_child_end_to_end(mod) -> list[str]:
+    """Drive the real LinuxServices.create_child with a mocked subprocess.run.
+
+    The groups above only call the classifier; this one proves the patched
+    method itself routes each outcome to the right code and log file.
+    """
+    import json
+    import pathlib
+    import shutil
+    import subprocess
+    import tempfile
+    from types import SimpleNamespace
+    from unittest import mock
+
+    failures: list[str] = []
+    job = {
+        "manifestPath": "/x/manifests/job.json",
+        "taskName": "codex-reset-consume-aaaaaaaaaaaa-bbbbbbbb.timer",
+        "jobId": "12345678-1234-4234-9234-123456789abc",
+    }
+
+    def done(returncode: int, stderr: str = "", stdout: str = ""):
+        return {"return_value": SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)}
+
+    cases = [
+        ("time", done(1, "error: Linux system time is not synchronized.\n"),
+         "CHILD_TIME_UNVERIFIED", ["code=CHILD_TIME_UNVERIFIED", "returncode=1", "Linux system time is not synchronized"], None),
+        ("admission", done(1, "error: Child enrollment requires enabled, unblocked automatic operation.\n"),
+         "CHILD_ADMISSION_REFUSED", ["code=CHILD_ADMISSION_REFUSED", "Child enrollment requires"], None),
+        ("task-reg", done(1, "error: The one-shot timer was not enabled and active.\n"),
+         "CHILD_TASK_REG_FAILED", ["code=CHILD_TASK_REG_FAILED", "one-shot timer was not enabled"], None),
+        ("unclassified-still-logged", done(1, "error: Something nobody anticipated.\n"),
+         "CHILD_INSTALL_FAILED", ["code=CHILD_INSTALL_FAILED", "Something nobody anticipated"], None),
+        ("timeout", {"side_effect": subprocess.TimeoutExpired(cmd=["python3"], timeout=600)},
+         "CHILD_PWSH_FAILED", ["code=CHILD_PWSH_FAILED", "extra=TimeoutExpired"], subprocess.TimeoutExpired),
+        ("oserror", {"side_effect": OSError("exec format error")},
+         "CHILD_PWSH_FAILED", ["code=CHILD_PWSH_FAILED", "extra=OSError"], OSError),
+        ("success-unchanged", done(0, "", json.dumps(job) + "\n"),
+         "OK", None, None),
+        ("bad-output-unchanged", done(0, "", "not json\n"),
+         "CHILD_INSTALL_OUTPUT_INVALID", None, None),
+    ]
+    with tempfile.TemporaryDirectory(prefix="b03linux-e2e") as directory:
+        root = pathlib.Path(directory)
+        python = root / "python3.13"
+        installer = root / "install_linux.py"
+        guard = root / "codex_reset_guard.py"
+        for path in (python, installer, guard):
+            path.write_text("# test\n", encoding="utf-8")
+        services = mod.LinuxServices(root)
+        logs = pathlib.Path(services.root) / "logs"
+        for name, run_kwargs, want_code, want_log, want_cause in cases:
+            shutil.rmtree(logs, ignore_errors=True)
+            got_code, got_cause, result = "OK", None, None
+            with (
+                mock.patch.object(mod.sys, "platform", "linux"),
+                mock.patch.dict(mod.os.environ, {"PATH": "/usr/bin:/bin", "HOME": "/home/t"}, clear=True),
+                mock.patch.object(mod, "_manager_console_python", return_value=python),
+                mock.patch.object(mod.subprocess, "run", **run_kwargs),
+            ):
+                try:
+                    result = services.create_child(installer, "/opt/npm/codex", str(guard))
+                except mod.ManagerError as error:
+                    got_code, got_cause = error.code, error.__cause__
+            if got_code != want_code:
+                failures.append(f"  {name}: code expected {want_code}, got {got_code}")
+            if want_code == "OK" and result != job:
+                failures.append(f"  {name}: success result changed: {result!r}")
+            if want_cause is not None and not isinstance(got_cause, want_cause):
+                failures.append(f"  {name}: __cause__ expected {want_cause.__name__}, got {type(got_cause).__name__}")
+            files = sorted(logs.glob("child-install-*.log")) if logs.exists() else []
+            if want_log is None:
+                if files:
+                    failures.append(f"  {name}: unexpected child-install log written: {[f.name for f in files]}")
+                continue
+            if len(files) != 1:
+                failures.append(f"  {name}: expected exactly 1 child-install log, found {len(files)}")
+                continue
+            text = files[0].read_text(encoding="utf-8")
+            for needle in want_log:
+                if needle not in text:
+                    failures.append(f"  {name}: log lacks {needle!r}")
+
+        shutil.rmtree(logs, ignore_errors=True)
+        with (
+            mock.patch.object(mod.sys, "platform", "linux"),
+            mock.patch.dict(mod.os.environ, {"PATH": "/usr/bin:/bin", "HOME": "/home/t"}, clear=True),
+            mock.patch.object(mod, "_manager_console_python", return_value=python),
+            mock.patch.object(mod.subprocess, "run") as run,
+        ):
+            try:
+                services.create_child(installer, "/opt/npm/codex", str(root / "absent_guard.py"))
+                code = "OK"
+            except mod.ManagerError as error:
+                code = error.code
+        if code != "CHILD_INSTALL_FAILED":
+            failures.append(f"  preflight-missing-guard: expected CHILD_INSTALL_FAILED, got {code}")
+        if run.called:
+            failures.append("  preflight-missing-guard: subprocess.run was called")
+        if logs.exists() and any(logs.glob("child-install-*.log")):
+            failures.append("  preflight-missing-guard: unexpected child-install log")
+    return failures
+
+
 def run_all(mgr_path: str) -> list[tuple[str, list[str]]]:
     mod = load_manager(mgr_path)
     return [
@@ -149,6 +264,7 @@ def run_all(mgr_path: str) -> list[tuple[str, list[str]]]:
         ("windows-classifier-no-regression", test_windows_classifier_still_works(mod)),
         ("pwsh-message-platform-neutral", test_pwsh_message_platform_neutral(mod)),
         ("app-version-bumped-2.7.6", test_app_version_bumped(mod)),
+        ("linux-create-child-end-to-end", test_linux_create_child_end_to_end(mod)),
     ]
 
 

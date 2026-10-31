@@ -6,3 +6,7 @@ disk form (CRLF-normalized):
 
 ## Also-touched file (test unlock):
 533552b2098ad1642c5a19fce7fcbd61f458bde0ee9cf7f65227dd421cb22402 *tests/test_manager_console.py
+
+## Git blob form (LF; what a fresh clone on Linux gets), tag v2.7.6 = commit 3c5fbca
+e5ceaedcea534dc7c2d12fb4086f5973af9a8ece9b8390f2d3ad3c48fb6b61db  codex_reset_manager.py (git blob id 29a716123910feb61b32eb67e9ca04f26b596ceb)
+The disk form above is this blob with CRLF line ends (core.autocrlf=true; verified: disk with CR stripped == blob).

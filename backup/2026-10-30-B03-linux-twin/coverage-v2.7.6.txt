@@ -1,0 +1,134 @@
+line   code                      install_linux.py message ({X} = f-string field)
+  151  CHILD_INSTALL_FAILED      command failed to run: {X}
+  155  CHILD_INSTALL_FAILED      command failed: {X}{X}
+  161  CHILD_PWSH_FAILED         The Linux installer requires native Linux.
+  163  CHILD_PWSH_FAILED         Do not run this installer with sudo or as root.
+  169  CHILD_PWSH_FAILED         WSL is not supported by the Linux installer.
+  171  CHILD_PWSH_FAILED         A systemd-based Linux installation is required.
+  173  CHILD_PWSH_FAILED         A logged-in systemd user session is required.
+  180  CHILD_INSTALL_FAILED      User lingering must be disabled; this tool runs only while the user is logged in.
+  206  CHILD_INSTALL_FAILED      Expected a private directory: {X}
+  209  CHILD_INSTALL_FAILED      Directory is not owned by the current user: {X}
+  212  CHILD_INSTALL_FAILED      Could not secure directory permissions: {X}
+  219  CHILD_INSTALL_FAILED      Expected a user directory: {X}
+  229  CHILD_PWSH_FAILED         The systemd user-unit path must be a non-symbolic-link directory.
+  232  CHILD_INSTALL_FAILED      The systemd user-unit directory must be user-owned and not group- or world-writable.
+  262  CHILD_INSTALL_FAILED      {X} is not a regular file: {X}
+  264  CHILD_INSTALL_FAILED      {X} must end with {X}.
+  288  CHILD_INSTALL_FAILED      Refusing to replace a non-regular path: {X}
+  292  CHILD_INSTALL_FAILED      File is not owned by the current user: {X}
+  309  CHILD_ADMISSION_REFUSED   Immutable runtime path has unexpected content: {X}
+  313  CHILD_ADMISSION_REFUSED   Installed runtime hash differs from source: {X}
+  334  CHILD_PWSH_FAILED         Python capability probe did not return valid JSON.
+  336  CHILD_PWSH_FAILED         Python capability probe returned an invalid document.
+  355  CHILD_INSTALL_FAILED      A final, GIL-enabled base CPython 3.11+ installation is required.
+  365  CHILD_INSTALL_FAILED      Existing ManagerSync service is not valid UTF-8.
+  375  CHILD_INSTALL_FAILED      Existing ManagerSync environment pin is malformed.
+  381  CHILD_INSTALL_FAILED      Existing ManagerSync environment pin is ambiguous.
+  384  CHILD_INSTALL_FAILED      Existing ManagerSync environment must contain exactly CODEX_HOME, CODEX_RESET_NPM, and PATH.
+  396  CHILD_INSTALL_FAILED      Existing ManagerSync service is not a regular file.
+  406  CHILD_INSTALL_FAILED      Existing ManagerSync CODEX_HOME pin is not absolute.
+  414  CHILD_INSTALL_FAILED      {X} has an unexpected owner.
+  421  CHILD_INSTALL_FAILED      {X} must not be a symbolic link.
+  425  CHILD_INSTALL_FAILED      {X} could not be inspected.
+  428  CHILD_INSTALL_FAILED      {X} is not a directory.
+  430  CHILD_INSTALL_FAILED      {X} is not a regular file.
+  433  CHILD_INSTALL_FAILED      {X} is group- or world-writable.
+  435  CHILD_INSTALL_FAILED      {X} is not executable.
+  448  CHILD_INSTALL_FAILED      {X} symbolic-link target is invalid.
+  464  CHILD_PWSH_FAILED         npm launcher must be an absolute path named npm.
+  466  CHILD_INSTALL_FAILED      npm launcher path contains a control character.
+  470  CHILD_INSTALL_FAILED      npm launcher directory could not be resolved.
+  527  CHILD_INSTALL_FAILED      Existing ManagerSync npm pin is incomplete.
+  530  CHILD_INSTALL_FAILED      Existing ManagerSync PATH does not match its npm pin.
+  544  CHILD_PWSH_FAILED         npm was not found on the interactive PATH.
+  551  CHILD_INSTALL_FAILED      ManagerSync has no verified npm environment pin.
+  555  CHILD_INSTALL_FAILED      Child npm environment differs from the loaded ManagerSync pin.
+  561  CHILD_INSTALL_FAILED      CODEX_HOME contains a control character.
+  564  CHILD_PWSH_FAILED         CODEX_HOME must be an absolute, non-symbolic-link directory.
+  567  CHILD_PWSH_FAILED         CODEX_HOME is not a directory.
+  570  CHILD_PWSH_FAILED         CODEX_HOME must be user-owned and not group- or world-writable.
+  588  CHILD_INSTALL_FAILED      {X} is not valid JSON: {X}
+  590  CHILD_INSTALL_FAILED      {X} must be a JSON object: {X}
+  597  CHILD_INSTALL_FAILED      Codex CLI returned an unsupported version string.
+  607  CHILD_INSTALL_FAILED      npm root -g returned an ambiguous path.
+  621  CHILD_INSTALL_FAILED      Unsupported Linux architecture: {X}
+  641  CHILD_INSTALL_FAILED      The global npm package must contain exactly one supported native Codex binary.
+  652  CHILD_INSTALL_FAILED      The global Codex npm package layout or version is invalid.
+  654  CHILD_INSTALL_FAILED      The requested Codex path is not the unique global npm-native executable.
+  659  CHILD_INSTALL_FAILED      Codex package and native executable versions differ.
+  666  CHILD_INSTALL_FAILED      Could not load immutable runtime: {X}
+  672  CHILD_INSTALL_FAILED      Immutable runtime could not be loaded: {X}
+  680  CHILD_INSTALL_FAILED      The guard does not provide Linux npm provenance validation.
+  684  CHILD_ADMISSION_REFUSED   Codex npm provenance validation failed.
+  686  CHILD_ADMISSION_REFUSED   Codex npm provenance validation returned an invalid result.
+  689  CHILD_ADMISSION_REFUSED   Codex npm provenance validation returned an unknown schema.
+  691  CHILD_ADMISSION_REFUSED   Codex npm provenance validation returned another executable.
+  693  CHILD_ADMISSION_REFUSED   Codex npm provenance validation returned an invalid hash.
+  695  CHILD_INSTALL_FAILED      Codex npm provenance identity is missing.
+  712  CHILD_INSTALL_FAILED      The manager does not expose its strict policy validator.
+  716  CHILD_INSTALL_FAILED      The manager rejected the installed policy schema.
+  724  CHILD_TIME_UNVERIFIED     Linux system time is not synchronized.
+  730  CHILD_INSTALL_FAILED      A systemd unit argument is empty or contains a control character.
+  749  CHILD_INSTALL_FAILED      A systemd scalar path must be absolute and contain no whitespace, control characters, quotes, backslashes, or percent signs.
+  758  CHILD_INSTALL_FAILED      The Linux manager runtime has no pinned npm launcher.
+  843  CHILD_INSTALL_FAILED      Manifest {X} is not strict UTC.
+  847  CHILD_INSTALL_FAILED      Manifest {X} is invalid.
+  894  CHILD_TASK_REG_FAILED     systemd returned duplicate metadata for {X}.
+  902  CHILD_TASK_REG_FAILED     systemd returned incomplete metadata for {X}.
+  916  CHILD_TASK_REG_FAILED     Loaded systemd unit contract differs from the installed file: {X}
+  939  CHILD_INSTALL_FAILED      ManagerSync is still running; retry the update after it finishes.
+  961  CHILD_INSTALL_FAILED      Another process owns {X}.
+  978  CHILD_INSTALL_FAILED      Manager child mode requires an owned {X}.
+  997  CHILD_INSTALL_FAILED      Manifest state is invalid: {X}
+ 1007  CHILD_TASK_REG_FAILED     More than one nonterminal manifest exists.
+ 1014  CHILD_TASK_REG_FAILED     The active manifest has an invalid Linux timer name.
+ 1018  CHILD_TASK_REG_FAILED     The active one-shot service is incomplete.
+ 1020  CHILD_PWSH_FAILED         The selected Python differs from the active one-shot runtime.
+ 1023  CHILD_TASK_REG_FAILED     The active one-shot installation is incomplete.
+ 1034  CHILD_TASK_REG_FAILED     An active one-shot changed during installation.
+ 1037  CHILD_TASK_REG_FAILED     An active one-shot timer state changed during installation.
+ 1054  CHILD_INSTALL_FAILED      Manager runtime is unavailable.
+ 1117  CHILD_TASK_REG_FAILED     Rollback policy is not an object.
+ 1130  CHILD_INSTALL_FAILED      Safe rollback policy readback changed.
+ 1141  CHILD_TASK_REG_FAILED     Installation rollback was incomplete: {X}
+ 1191  CHILD_ADMISSION_REFUSED   Manager policy did not pin the installed immutable runtimes.
+ 1195  CHILD_INSTALL_FAILED      Installation changed the existing automatic-use state.
+ 1197  CHILD_ADMISSION_REFUSED   A new Linux installation must start paused.
+ 1214  CHILD_INSTALL_FAILED      Manager policy readback differs from the committed bytes.
+ 1226  CHILD_TASK_REG_FAILED     ManagerSync timer was not enabled and active.
+ 1254  CHILD_ADMISSION_REFUSED   Child enrollment requires enabled, unblocked automatic operation.
+ 1256  CHILD_ADMISSION_REFUSED   Executing installer does not match the policy runtime pin.
+ 1258  CHILD_ADMISSION_REFUSED   Guard runtime does not match the policy runtime pin.
+ 1267  CHILD_ADMISSION_REFUSED   Manager policy has no valid approved CLI pin.
+ 1269  CHILD_ADMISSION_REFUSED   Child Codex path differs from the approved CLI pin.
+ 1283  CHILD_ADMISSION_REFUSED   The cached npm provenance identity is not canonical.
+ 1291  CHILD_INSTALL_FAILED      The guard does not provide the Linux CLI pin observer.
+ 1295  CHILD_INSTALL_FAILED      The approved Codex binary could not be observed.
+ 1297  CHILD_INSTALL_FAILED      The CLI pin observer returned an invalid result.
+ 1310  CHILD_ADMISSION_REFUSED   The Codex CLI no longer matches its approved policy pin.
+ 1326  CHILD_INSTALL_FAILED      --manager-child-only requires --install-root, --python-path, --codex-path, and --runtime-guard.
+ 1339  CHILD_ADMISSION_REFUSED   Child CODEX_HOME differs from the ManagerSync environment pin.
+ 1342  CHILD_ADMISSION_REFUSED   Child installer must run under the explicitly pinned Python runtime.
+ 1347  CHILD_ADMISSION_REFUSED   Child mode requires content-addressed installed runtimes.
+ 1349  CHILD_ADMISSION_REFUSED   Guard is not an immutable content-addressed runtime.
+ 1351  CHILD_ADMISSION_REFUSED   Installer is not an immutable content-addressed runtime.
+ 1353  CHILD_ADMISSION_REFUSED   A content-addressed runtime hash does not match its filename.
+ 1360  CHILD_TASK_REG_FAILED     A nonterminal one-shot already exists.
+ 1385  CHILD_INSTALL_FAILED      The guard does not provide approved-pin enrollment.
+ 1396  CHILD_TASK_REG_FAILED     Guard enrollment failed.
+ 1399  CHILD_TASK_REG_FAILED     Enrollment did not produce one unarmed manifest.
+ 1403  CHILD_INSTALL_FAILED      Enrolled manifest schema is incomplete.
+ 1407  CHILD_INSTALL_FAILED      Enrolled target hash is invalid.
+ 1411  CHILD_INSTALL_FAILED      Less than ten minutes remain before the one-shot trigger.
+ 1418  CHILD_TASK_REG_FAILED     The derived one-shot systemd unit already exists.
+ 1434  CHILD_TASK_REG_FAILED     The one-shot timer was not enabled and active.
+ 1437  CHILD_INSTALL_FAILED      The guard does not provide the Linux task contract validator.
+ 1441  CHILD_TASK_REG_FAILED     The guard rejected the loaded one-shot task contract.
+ 1448  CHILD_TASK_REG_FAILED     The guard did not arm the one-shot manifest.
+ 1450  CHILD_TASK_REG_FAILED     The armed manifest did not pin the exact timer unit.
+ 1462  CHILD_TASK_REG_FAILED     the partial timer remained enabled or active
+ 1474  CHILD_TASK_REG_FAILED     the partial manifest did not become DISARMED
+ 1483  CHILD_INSTALL_FAILED      Child installation failed and cleanup was incomplete: {X}
+ 1516  CHILD_INSTALL_FAILED      Child mode does not accept source runtime paths or --npm-path.
+ 1522  CHILD_INSTALL_FAILED      --runtime-guard is reserved for child mode.
