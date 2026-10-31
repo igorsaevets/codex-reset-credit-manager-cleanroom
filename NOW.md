@@ -1,12 +1,12 @@
 # NOW — Codex Reseter (state layer)
-Updated: 2026-10-30 (post-compact: B-03 Linux twin landed as **v2.7.6**; v2.7.5 Windows fixes already shipped; operator pause deliberate; next step waits for 11-06)
+Updated: 2026-10-31T02:10Z (B-03 Linux twin released as **v2.7.6** after operator-requested re-verification; v2.7.5 Windows fixes already shipped; operator pause deliberate; next step waits for 11-06)
 Single writer: main session
 
 ## 🟢 Public releases on `igorsaevets/codex-usage-limit-auto-reset`
 
 ### v2.7.6 (just landed 2026-10-30, post-compact)
 - Commit `3c5fbca` on `main` (fast-forward from `be3e849`), tag `v2.7.6` pushed.
-- GitHub Releases page: the first `gh release create` was blocked by the Claude Code auto-mode classifier ("Create Public Surface"). Operator then approved publication on condition of a full re-verification first — done, see «Re-verification before release» below.
+- GitHub Releases page: the first `gh release create` was blocked by the Claude Code auto-mode classifier ("Create Public Surface"). Operator then approved publication on condition of a full re-verification first — done, see «Re-verification before release» below. **Published 2026-10-31T02:10:09Z**: https://github.com/igorsaevets/codex-usage-limit-auto-reset/releases/tag/v2.7.6 (marked Latest; body = `backup\2026-10-30-B03-linux-twin\release-notes-v2.7.6.md`, verified identical via the API).
 - Change: Linux twin for B-03. New `_LINUX_INSTALLER_SIGNATURES` + `_classify_linux_installer_stderr` at module scope; `LinuxServices.create_child` now classifies `install_linux.py` stderr into the 4 CHILD_* codes and writes `logs/child-install-*.log` via the inherited `_record_child_install_failure`. `ERROR_MESSAGES[CHILD_PWSH_FAILED]` reworded to platform-neutral ("could not start its native runtime"). APP_VERSION 2.7.5 → 2.7.6; `tests/test_manager_console.py:102` updated from stale "2.7.4" assert to "2.7.6".
 - Pre-SHA256 of `codex_reset_manager.py` (disk form, CRLF): `2bdb56064dd3028ef6f84ba979429795e5fc35084ff44e13b013d7313aac31a7`
 - Post-SHA256 of `codex_reset_manager.py` (disk form, CRLF): `70248853bb7951eab23dfaa4a8c2de392b2636d540e753a2b8b2f061fdbface2`
@@ -68,7 +68,8 @@ cleanroom repo (`codex-reset-credit-manager-cleanroom`) branch main HEAD = `15ce
 - **~~Linux twin for B-03~~ DONE as v2.7.6.** B-10b barrier was already shared, so Linux twin was only needed for the B-03 classifier + log; shipped 2026-10-30 post-compact.
 - **B-05 escalation residual** (jsonl-only, now that notification channel is confirmed working — `notifications.delivered: true` for `paused` key today): `_block` emits an `escalation` event when `streak >= 2 AND timeSinceLastNotify > 7200s`. Pure data layer, no live reservation risk.
 - **~~GEMINI.md / AGENTS.md~~ DONE** at `D:\Gemini Projects\Codex Reseter\GEMINI.md` (3.6 KB) — Antigravity's next session has project-level context.
-- **GitHub Release page for v2.7.6**: tag + code are public but Releases-page entry still needs operator approval (classifier blocked `gh release create`).
+- **~~GitHub Release page for v2.7.6~~ DONE** 2026-10-31T02:10:09Z.
+- **B-13** (new, safe now): Linux classifier coverage 59/133 → higher, test-fake fidelity, Linux-clean upstream suite, Linux wording of `CHILD_TASK_REG_FAILED`. Pure manager-source work, no live-install contact.
 
 **Deferred until after 2026-11-06T23:24:29Z dispatch:**
 - **B-04** truthful disarm reason — guard-side change on live Consume task.
@@ -95,7 +96,7 @@ In installed runtime (`C:\Users\igors\AppData\Local\CodexResetCredit\runners\`):
 - `codex_reset_manager-fdf1666889c047cee6e3151417e9e7f61c3ad93b83d1498f9c0b8511045be729.py` — same five fixes
 
 In upstream fork OneDrive clone (`C:\Users\igors\OneDrive\Документы\New project\codex-usage-limit-auto-reset\`):
-- `codex_reset_manager.py` — v2.7.5 content (B-01..B-10b) in commit `be3e849`; v2.7.6 content (B-03 Linux twin) in commit `3c5fbca` on main. Pushed to origin; tags `v2.7.5` and `v2.7.6` published; v2.7.5 Release page live, v2.7.6 Release page pending operator approval.
+- `codex_reset_manager.py` — v2.7.5 content (B-01..B-10b) in commit `be3e849`; v2.7.6 content (B-03 Linux twin) in commit `3c5fbca` on main. Pushed to origin; tags `v2.7.5` and `v2.7.6` published; both Release pages live (v2.7.6 published 2026-10-31T02:10:09Z, marked Latest).
 - `tests/test_manager_console.py` — line 102 assertion unlocked from "2.7.4" (stale after v2.7.5) → "2.7.6".
 
 ## Hashes (for recovery if a copy drifts)
@@ -117,7 +118,7 @@ In upstream fork OneDrive clone (`C:\Users\igors\OneDrive\Документы\New
 - `powercfg RTCWAKE DC=1` left as user-decision for the 11-06 window.
 - Toast channel confirmed WORKING for the `paused` key (`notifications.json delivered:true` observed today). B-12 scope narrows accordingly.
 - B-05 escalation re-notify path: previously assumed toast-dependent; both toast and jsonl-only are viable.
-- GitHub release scope: v2.7.5 shipped Windows-only versions of B-03 and B-10b. **v2.7.6 (2026-10-30 post-compact) added the Linux twin for B-03** — barrier (B-10b) was already shared so Linux has had that fix since v2.7.5. GitHub Releases-page entry for v2.7.6 pending operator approval.
+- GitHub release scope: v2.7.5 shipped Windows-only versions of B-03 and B-10b. **v2.7.6 (2026-10-30 post-compact) added the Linux twin for B-03** — barrier (B-10b) was already shared so Linux has had that fix since v2.7.5. GitHub release v2.7.6 published 2026-10-31T02:10:09Z.
 
 ## Open backlog (pointers only)
 - B-04 P0 (deferred until after 11-06) → `docs\backlog.md`
@@ -128,3 +129,4 @@ In upstream fork OneDrive clone (`C:\Users\igors\OneDrive\Документы\New
 - B-11 instrumented reset probe (**FORBIDDEN before 11-06**) → `docs\backlog.md`
 - B-12 hygiene (now incl. quarantine purge from B-10b) → `docs\backlog.md`
 - Linux twin for B-03 — DONE in v2.7.6 (see Public releases above)
+- B-13 Linux classifier coverage + test fidelity (P1, safe now) → `docs\backlog.md`

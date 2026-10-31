@@ -6,7 +6,9 @@ This is a project-level memory file for Antigravity, auto-loaded from the projec
 
 `D:\Gemini Projects\Codex Reseter\` is a **git clone of the cleanroom notifier repo** `igorsaevets/codex-reset-credit-manager-cleanroom` — a read-only Windows observer for Codex rate-limit usage. It ships Python package `codex_reset_credit_manager` with CLI and GUI. **It does not perform resets** — see `docs/upstream-differences.md` and `docs/provenance.md`.
 
-The companion **upstream manager** (which actually consumes reset credits automatically) is a **separate repo**: `igorsaevets/codex-usage-limit-auto-reset` (operator's fork of `godxxy1229/codex-usage-limit-auto-reset`). Its source lives locally at `C:\Users\igors\OneDrive\Документы\New project\codex-usage-limit-auto-reset\`. Latest release: **v2.7.5** (2026-10-30), with five reliability fixes landed from the audit done in this cleanroom repo. Any change to manager runtime behaviour goes there, not here.
+The companion **upstream manager** (which actually consumes reset credits automatically) is a **separate repo**: `igorsaevets/codex-usage-limit-auto-reset` (operator's fork of `godxxy1229/codex-usage-limit-auto-reset`). Its source lives locally at `C:\Users\igors\OneDrive\Документы\New project\codex-usage-limit-auto-reset\`. Latest release: **v2.7.6** (2026-10-31, Linux twin of the B-03 child-install diagnostics); v2.7.5 (2026-10-30) carried the five Windows reliability fixes from the audit done in this cleanroom repo. Any change to manager runtime behaviour goes there, not here.
+
+Trap: the OneDrive clone has cloud-only placeholder files (`setup.cmd`, `setup-linux.sh`, `docs\images\social-preview.svg`) that do not hydrate, so 3 upstream tests fail there with `OSError [Errno 22]`. Run the upstream suite from a fresh clone outside OneDrive (318 pass on v2.7.6).
 
 ## Operational constraints (hard rules)
 
